@@ -15,8 +15,9 @@
 
 #include "f_autopilot.hpp"
 #include "autopilot.pb.h"
+DEFINE_FILTER(f_autopilot)
 
-f_aws1_ap::f_aws1_ap(const char * name) :
+f_autopilot::f_autopilot(const char * name) :
   f_base(name), 
   m_state(NULL), m_engstate(NULL), m_ctrl_inst(NULL), m_ctrl_stat(NULL), 
   m_ap_inst(NULL), m_ais_obj(NULL), m_verb(false),
@@ -104,7 +105,7 @@ f_aws1_ap::f_aws1_ap(const char * name) :
   }
 }
 
-f_aws1_ap::~f_aws1_ap()
+f_autopilot::~f_autopilot()
 {
   for (int itbl = 0; itbl < 60; itbl++){
     if(str_tbl_stable_rpm[itbl])
@@ -116,34 +117,34 @@ f_aws1_ap::~f_aws1_ap()
   }
 }
 
-bool f_aws1_ap::init_run()
+bool f_autopilot::init_run()
 {
   if(!m_state){
-    cerr << "Error in f_aws1_ap::init_run(). ";
+    cerr << "Error in f_autopilot::init_run(). ";
     cerr << "state is not connected." << endl;
     return false;
   }
 
   if(!m_engstate){
-    cerr << "Error in f_aws1_ap::init_run(). ";
+    cerr << "Error in f_autopilot::init_run(). ";
     cerr << "engstate is not connected." << endl;
     return false;
   }
 
   if(!m_ctrl_inst){
-    cerr << "Error in f_aws1_ap::init_run(). ";
+    cerr << "Error in f_autopilot::init_run(). ";
     cerr << "ctrl_inst is not connected." << endl;
     return false;
   }
 
   if(!m_ctrl_stat){
-    cerr << "Error in f_aws1_ap::init_run(). ";
+    cerr << "Error in f_autopilot::init_run(). ";
     cerr << "ctrl_stat is not connected." << endl;
     return false;
   }
 
   if(!m_ap_inst){
-    cerr << "Error in f_aws1_ap::init_run(). ";
+    cerr << "Error in f_autopilot::init_run(). ";
     cerr << "ap_inst is not connected." << endl;
     return false;
   }
@@ -160,18 +161,18 @@ bool f_aws1_ap::init_run()
   return true;
 }
 
-void f_aws1_ap::destroy_run()
+void f_autopilot::destroy_run()
 {
   if(fctrl_state[0] != '\0'){
     save_ctrl_state();
   }
 }
 
-void f_aws1_ap::save_ctrl_state()
+void f_autopilot::save_ctrl_state()
 {
   ofstream file(fctrl_state);
   if(!file.is_open()){
-    cerr << "f_aws1_ap::save_ctrl_state() failed to open file " << fctrl_state << "." << endl;
+    cerr << "f_autopilot::save_ctrl_state() failed to open file " << fctrl_state << "." << endl;
     return;
   }
   // yaw_bias
@@ -188,11 +189,11 @@ void f_aws1_ap::save_ctrl_state()
   ctrl_state.SerializeToOstream(&file);
 }
 
-void f_aws1_ap::load_ctrl_state()
+void f_autopilot::load_ctrl_state()
 {
   ifstream file(fctrl_state);
   if(!file.is_open()){
-    cerr << "f_aws1_ap::load_ctrl_state() failed to open file " << fctrl_state << "." << endl;
+    cerr << "f_autopilot::load_ctrl_state() failed to open file " << fctrl_state << "." << endl;
     return;
   }
   // yaw_bias
@@ -212,7 +213,7 @@ void f_aws1_ap::load_ctrl_state()
   monotonize_tbl_stable_nrpm();
 }
 
-bool f_aws1_ap::is_stable(const float cog, const float sog,
+bool f_autopilot::is_stable(const float cog, const float sog,
 			  const float yaw, const float rev)
 {   
   if(abs(yaw-yaw_stbl) < devyaw &&
@@ -233,7 +234,7 @@ bool f_aws1_ap::is_stable(const float cog, const float sog,
   return false;
 }
 
-void f_aws1_ap::calc_stat(const long long tvel, const float cog,
+void f_autopilot::calc_stat(const long long tvel, const float cog,
 			  const float sog,
 			  const long long tyaw, const float yaw,
 			  const long long trev, const float rev,
@@ -380,7 +381,7 @@ void f_aws1_ap::calc_stat(const long long tvel, const float cog,
   }
 }
 
-bool f_aws1_ap::proc()
+bool f_autopilot::proc()
 {
   float cog, sog, rpm, roll, pitch, yaw;  
   s_aws1_ctrl_stat stat;
@@ -447,7 +448,7 @@ bool f_aws1_ap::proc()
 }
 
 
-const float f_aws1_ap::calc_course_change_for_ais_ship(const float crs)
+const float f_autopilot::calc_course_change_for_ais_ship(const float crs)
 {
   float cc = 0.; // course change
   
@@ -502,7 +503,7 @@ const float f_aws1_ap::calc_course_change_for_ais_ship(const float crs)
   return cc;
 }
 
-void f_aws1_ap::ctrl_to_cog(const float cdiff)
+void f_autopilot::ctrl_to_cog(const float cdiff)
 {
   float rudmid = (is_rud_ltor ? rudmidlr : rudmidrl);
   float _cdiff = cdiff;
@@ -534,7 +535,7 @@ void f_aws1_ap::ctrl_to_cog(const float cdiff)
 }
 
 
-void f_aws1_ap::ctrl_to_rev(const float rev, const float rev_tgt,
+void f_autopilot::ctrl_to_rev(const float rev, const float rev_tgt,
 			    const float rev_max, const float rev_min)
 {
   float _rev_tgt;
@@ -581,7 +582,7 @@ void f_aws1_ap::ctrl_to_rev(const float rev, const float rev_tgt,
   }
 }
 
-void f_aws1_ap::ctrl_to_sog(const float sog, const float sog_tgt,
+void f_autopilot::ctrl_to_sog(const float sog, const float sog_tgt,
 			    const float smax, const float smin)
 {
   float rudmid = (is_rud_ltor ? rudmidlr : rudmidrl);
@@ -607,7 +608,7 @@ void f_aws1_ap::ctrl_to_sog(const float sog, const float sog_tgt,
   }
 }
 
-void f_aws1_ap::ctrl_to_sog_cog(const float sog, const float sog_tgt,
+void f_autopilot::ctrl_to_sog_cog(const float sog, const float sog_tgt,
 				const float cdiff,
 				const float smax, const float smin)
 {
@@ -615,7 +616,7 @@ void f_aws1_ap::ctrl_to_sog_cog(const float sog, const float sog_tgt,
   ctrl_to_sog(sog, sog_tgt, smax, smin);  
 }
 
-void f_aws1_ap::wp(const float sog, const float cog, const float yaw, bool bav)
+void f_autopilot::wp(const float sog, const float cog, const float yaw, bool bav)
 {
   float cc = 0;
   float sog_tgt = 0.0;
@@ -648,7 +649,7 @@ void f_aws1_ap::wp(const float sog, const float cog, const float yaw, bool bav)
   m_wp->unlock();
 }
 
-void f_aws1_ap::cursor(const float sog, const float cog, const float yaw, bool bav)
+void f_autopilot::cursor(const float sog, const float cog, const float yaw, bool bav)
 {
   float xr, yr, d, dir;
   m_ap_inst->get_csr_pos_rel(xr, yr, d, dir);
@@ -659,7 +660,7 @@ void f_aws1_ap::cursor(const float sog, const float cog, const float yaw, bool b
   ctrl_to_sog_cog(sog, sog_tgt, cdiff, m_smax, m_smin);
 }
 
-void f_aws1_ap::flw_tgt(const float sog, const float cog, const float yaw, bool bav)
+void f_autopilot::flw_tgt(const float sog, const float cog, const float yaw, bool bav)
 {
   float xr, yr, d, dir;
   m_ap_inst->get_tgt_pos_rel(xr, yr, d, dir);
@@ -677,7 +678,7 @@ void f_aws1_ap::flw_tgt(const float sog, const float cog, const float yaw, bool 
   ctrl_to_sog_cog(sog, sog_tgt, cdiff, m_smax, m_smin);
 }
 
-void f_aws1_ap::stay(const float sog, const float cog, const float yaw)
+void f_autopilot::stay(const float sog, const float cog, const float yaw)
 {
   { // updating relative position of the stay point.
     long long t;
@@ -704,7 +705,7 @@ void f_aws1_ap::stay(const float sog, const float cog, const float yaw)
 }
 
 
-void f_aws1_ap::stb_man(const float cog, const float rev)
+void f_autopilot::stb_man(const float cog, const float rev)
 {
   float cog_tgt, rev_tgt;
   m_ap_inst->get_tgt_cog_and_rev(cog_tgt, rev_tgt);

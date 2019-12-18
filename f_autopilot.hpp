@@ -2,18 +2,18 @@
 #define F_AUTOPILOT_HPP
 // Copyright(c) 2016-2019 Yohei Matsumoto, All right reserved. 
 
-// f_aws1_ap.h is free software: you can redistribute it and/or modify
+// f_autopilot.h is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// f_aws1_ap.h is distributed in the hope that it will be useful,
+// f_autopilot.h is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with f_aws1_ap.h.  If not, see <http://www.gnu.org/licenses/>. 
+// along with f_autopilot.h.  If not, see <http://www.gnu.org/licenses/>. 
 
 #include "filter_base.hpp"
 #include "ch_aws1_ctrl.hpp"
@@ -23,7 +23,7 @@
 
 // automatically controls along with the waypoints
 // connects to ch_wp
-class f_aws1_ap: public f_base
+class f_autopilot: public f_base
 {
 protected:
   ch_state * m_state;
@@ -136,8 +136,8 @@ protected:
   void save_ctrl_state();
   void load_ctrl_state();
  public:
-  f_aws1_ap(const char * name);
-  virtual ~f_aws1_ap();
+  f_autopilot(const char * name);
+  virtual ~f_autopilot();
   
   virtual bool init_run();
   virtual void destroy_run();
