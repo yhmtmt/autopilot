@@ -1,4 +1,5 @@
-add_library(autopilot SHARED f_autopilot.cpp)
-
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS ${CMAKE_CURRENT_SOURCE_DIR} autopilot.proto)
+add_library(autopilot SHARED f_autopilot.cpp ${PROTO_SRCS} ${CHANS})
+target_include_directories(autopilot PUBLIC ${PROJECT_SOURCE_DIR}/channels)
 target_include_directories(autopilot PUBLIC ${PROJECT_SOURCE_DIR}/include)
 install(TARGETS autopilot DESTINATION lib)

@@ -1,11 +1,11 @@
-// Copyright(c) 2016 Yohei Matsumoto, All right reserved. 
+// Copyright(c) 2019 Yohei Matsumoto, All right reserved. 
 
-// f_aws1_ui.cpp is free software: you can redistribute it and/or modify
+// f_autopilot.cpp is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// f_aws1_ui.cpp is distributed in the hope that it will be useful,
+// f_autopilot.cpp is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
@@ -13,30 +13,12 @@
 // You should have received a copy of the GNU General Public License
 // along with f_aws1_ui.cpp.  If not, see <http://www.gnu.org/licenses/>. 
 
-#include "stdafx.h"
-
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <list>
-#include <map>
-using namespace std;
-#include <cmath>
-#include <cstring>
-
-#include "../util/aws_stdlib.h"
-#include "../util/aws_thread.h"
-#include "../util/c_clock.h"
-
-#include <opencv2/opencv.hpp>
-using namespace cv;
-
-#include "f_aws1_ap.h"
-#include "../proto/aws1_ap.pb.h"
+#include "f_autopilot.hpp"
+#include "autopilot.pb.h"
 
 f_aws1_ap::f_aws1_ap(const char * name) :
   f_base(name), 
-  m_state(NULL), m_engstate(NULL), m_ctrl_inst(NULL), m_ctrl_stat(NULL), m_obst(NULL),
+  m_state(NULL), m_engstate(NULL), m_ctrl_inst(NULL), m_ctrl_stat(NULL), 
   m_ap_inst(NULL), m_ais_obj(NULL), m_verb(false),
   m_wp(NULL), m_meng(127.), m_seng(127.), m_rud(127.), 
   m_smax(10), m_smin(3), m_rev_max(5500), m_rev_min(700),
@@ -62,7 +44,6 @@ f_aws1_ap::f_aws1_ap(const char * name) :
   register_fpar("ch_ctrl_inst", (ch_base**)&m_ctrl_inst, typeid(ch_aws1_ctrl_inst).name(), "Ctrl instruction channel");
   register_fpar("ch_ctrl_stat", (ch_base**)&m_ctrl_stat, typeid(ch_aws1_ctrl_stat).name(), "Ctrl status channel");
   register_fpar("ch_wp", (ch_base**)&m_wp, typeid(ch_wp).name(), "Waypoint channel");
-  register_fpar("ch_obst", (ch_base**)&m_obst, typeid(ch_obst).name(), "Obstacle channel.");
   register_fpar("ch_ap_inst", (ch_base**)&m_ap_inst, typeid(ch_aws1_ap_inst).name(), "Autopilot instruction channel");
   register_fpar("ch_ais_obj", (ch_base**)&m_ais_obj, typeid(ch_ais_obj).name(), "AIS object channel.");
   register_fpar("verb", &m_verb, "Verbose for debug.");
@@ -403,16 +384,14 @@ bool f_aws1_ap::proc()
 {
   float cog, sog, rpm, roll, pitch, yaw;  
   s_aws1_ctrl_stat stat;
-  Mat Rorg;
-  Point3d Porg;
+  double Rorg[9];
   unsigned char trim;
   long long t = 0;
   long long teng = 0;
   long long tvel = 0;
   long long tatt = 0;
   m_state->get_velocity(tvel, cog, sog);
-  Rorg = m_state->get_enu_rotation(t);
-  m_state->get_position_ecef(t, Porg.x, Porg.y, Porg.z);
+  m_state->get_enu_rotation(t, Rorg);
   m_engstate->get_rapid(teng, rpm, trim);
   m_state->get_attitude(tatt, roll, pitch, yaw);
   m_ctrl_stat->get(stat);
@@ -459,9 +438,9 @@ bool f_aws1_ap::proc()
   }
   
   m_inst.tcur = get_time();
-  m_inst.meng_aws = saturate_cast<unsigned char>(m_meng);
-  m_inst.seng_aws = saturate_cast<unsigned char>(m_seng);
-  m_inst.rud_aws = saturate_cast<unsigned char>(m_rud);
+  m_inst.meng_aws = (unsigned char) min(max(m_meng, m_meng_min), m_meng_max);
+  m_inst.seng_aws = (unsigned char) min(max(m_seng, m_seng_min), m_seng_max);
+  m_inst.rud_aws = (unsigned char) min(max(m_rud, 0.f), 255.f);
   m_ctrl_inst->set(m_inst);
   
   return true;
@@ -480,7 +459,8 @@ const float f_aws1_ap::calc_course_change_for_ais_ship(const float crs)
     m_ais_obj->lock();
     for (m_ais_obj->begin(); !m_ais_obj->is_end(); m_ais_obj->next())
       {
-	float x, y, z, vx, vy, vz, yw;
+	double x, y, z;
+	float vx, vy, vz, yw;
 	float bear, dist, tcpa, dcpa;
 	if (!m_ais_obj->get_cur_state(x, y, z, vx, vy, vz, yw) ||
 	    !m_ais_obj->get_tdcpa(tcpa, dcpa) ||
@@ -701,9 +681,9 @@ void f_aws1_ap::stay(const float sog, const float cog, const float yaw)
 {
   { // updating relative position of the stay point.
     long long t;
-    Mat Rorg;
+    double Rorg[9];
     double xorg, yorg, zorg;
-    Rorg = m_state->get_enu_rotation(t);
+    m_state->get_enu_rotation(t, Rorg);
     m_state->get_position_ecef(t, xorg, yorg, zorg);
     m_ap_inst->update_pos_rel(Rorg, xorg, yorg, zorg);
   }

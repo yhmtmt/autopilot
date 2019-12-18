@@ -1,6 +1,6 @@
-#ifndef _F_AWS1_AP_H_
-#define _F_AWS1_AP_H_
-// Copyright(c) 2016-2018 Yohei Matsumoto, All right reserved. 
+#ifndef F_AUTOPILOT_HPP
+#define F_AUTOPILOT_HPP
+// Copyright(c) 2016-2019 Yohei Matsumoto, All right reserved. 
 
 // f_aws1_ap.h is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,11 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with f_aws1_ap.h.  If not, see <http://www.gnu.org/licenses/>. 
 
-#include "f_base.h"
-#include "../channel/ch_aws1_ctrl.h"
-#include "../channel/ch_state.h"
-#include "../channel/ch_obj.h"
-#include "../channel/ch_wp.h"
+#include "filter_base.hpp"
+#include "ch_aws1_ctrl.hpp"
+#include "ch_state.hpp"
+#include "ch_obj.hpp"
+#include "ch_wp.hpp"
 
 // automatically controls along with the waypoints
 // connects to ch_wp
@@ -32,7 +32,6 @@ protected:
   ch_aws1_ctrl_stat * m_ctrl_stat;
   ch_aws1_ap_inst * m_ap_inst;
   ch_wp * m_wp;
-  ch_obst * m_obst;
   ch_ais_obj * m_ais_obj;
   
   s_aws1_ctrl_inst m_inst;
