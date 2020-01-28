@@ -107,14 +107,6 @@ f_autopilot::f_autopilot(const char * name) :
 
 f_autopilot::~f_autopilot()
 {
-  for (int itbl = 0; itbl < 60; itbl++){
-    if(str_tbl_stable_rpm[itbl])
-      delete str_tbl_stable_rpm[itbl];
-    if(str_tbl_stable_nrpm[itbl])
-      delete str_tbl_stable_nrpm[itbl];
-    str_tbl_stable_rpm[itbl] = 0;
-    str_tbl_stable_nrpm[itbl] = 0;
-  }
 }
 
 bool f_autopilot::init_run()
@@ -177,7 +169,6 @@ void f_autopilot::save_ctrl_state()
   }
   // yaw_bias
   // rudmidlr, rudmidrl
-  // str_tbl_stable_rpm, str_tbl_stable_nrpm
   ApControlState ctrl_state;
   ctrl_state.set_yaw_bias(yaw_bias);
   ctrl_state.set_rudmidlr(rudmidlr);
@@ -198,7 +189,6 @@ void f_autopilot::load_ctrl_state()
   }
   // yaw_bias
   // rudmidlr, rudmidrl
-  // str_tbl_stable_rpm, str_tbl_stable_nrpm
   ApControlState ctrl_state;
   ctrl_state.ParseFromIstream(&file);
   

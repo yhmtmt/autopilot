@@ -60,8 +60,6 @@ protected:
 		 const float yaw, const float rev);
   
   float rudmidlr, rudmidrl;
-  char * str_tbl_stable_rpm[60];
-  char * str_tbl_stable_nrpm[60];
   void monotonize_tbl_stable_rpm(int i = 0)
   {
     float vprev = tbl_stable_rpm[i];
