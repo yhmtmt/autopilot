@@ -330,14 +330,16 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
 
   if (is_stable(cog, sog, yaw, rev_prop)){
     int irev =  (int)(rev_prop * 0.01);
+    irev = max(irev, 59);
+    irev = min(irev, -59);
     float ialpha = (float)(1.0 - alpha_tbl_stable_rpm);
     if(irev >= 0){
       tbl_stable_rpm[irev] = (float)(tbl_stable_rpm[irev] * ialpha
 				     +alpha_tbl_stable_rpm * m_meng);
       monotonize_tbl_stable_rpm(irev);
-    if(m_verb)
-      cout << "rpmtbl[" << irev << "] is updated to "
-	   << tbl_stable_rpm[irev] << endl;
+      if(m_verb)
+	cout << "rpmtbl[" << irev << "] is updated to "
+	     << tbl_stable_rpm[irev] << endl;
     }else{
       tbl_stable_nrpm[-irev] = (float)(float)(tbl_stable_nrpm[irev] * ialpha
 				     +alpha_tbl_stable_rpm * m_meng);
@@ -538,7 +540,7 @@ void f_autopilot::ctrl_to_rev(const float rev, const float rev_tgt,
   
   int irev = (int)(_rev_tgt * 0.01);
   if(irev < 0){ // for negative _rev_tgt
-    m_meng = tbl_stable_rpm[irev];
+    m_meng = tbl_stable_nrpm[-irev];
     float revdiff = max(min(rev_max, -_rev_tgt), rev_min) - rev;
     revdiff *= (float)(-1. / (rev_max - rev_min));
     m_drevdiff = (float)(revdiff - m_revdiff);
