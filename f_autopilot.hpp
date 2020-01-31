@@ -98,17 +98,16 @@ protected:
   float m_pc, m_ic, m_dc; // PID for course control
   float m_ps, m_is, m_ds; // PID for speed control
   
-  float m_meng, m_seng, m_rud;
+  float m_meng, m_rud;
   float rev_prop, u, v, uflw, vflw, ucor, vcor, angle_drift, angle_flw, angle_drift_cor, yaw_bias, sog_cor, cog_cor;
-  unsigned short  dmeng, dseng, drud;
-  unsigned short meng_prev, seng_prev, rud_prev;
+  unsigned short  dmeng, drud;
+  unsigned short meng_prev, rud_prev;
   float alpha_yaw_bias;
   
   // control limitter 
   float m_smax, m_smin;
   float m_rev_max, m_rev_min; // rev limit (absolute value)
   float m_meng_max, m_meng_min;
-  float m_seng_max, m_seng_min;
   
   const float calc_course_change_for_ais_ship(const float yaw);
   void ctrl_to_sog_cog(const float sog, const float sog_tgt,

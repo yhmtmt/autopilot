@@ -21,9 +21,9 @@ f_autopilot::f_autopilot(const char * name) :
   f_base(name), 
   m_state(NULL), m_engstate(NULL), m_ctrl_inst(NULL), m_ctrl_stat(NULL), 
   m_ap_inst(NULL), m_ais_obj(NULL), m_verb(false),
-  m_wp(NULL), m_meng(127.), m_seng(127.), m_rud(127.), 
+  m_wp(NULL), m_meng(127.), m_rud(127.), 
   m_smax(10), m_smin(3), m_rev_max(5500), m_rev_min(700),
-  m_meng_max(200), m_meng_min(80), m_seng_max(200), m_seng_min(80),
+  m_meng_max(200), m_meng_min(80),
   devyaw(3.0f), devcog(3.0f), devsog(1.0f), devrev(500.f),
   m_pc(0.1f), m_ic(0.1f), m_dc(0.1f), m_ps(0.1f), m_is(0.1f), m_ds(0.1f),
   m_cdiff(0.f), m_sdiff(0.f), m_revdiff(0.f),
@@ -50,14 +50,11 @@ f_autopilot::f_autopilot(const char * name) :
   register_fpar("verb", &m_verb, "Verbose for debug.");
   register_fpar("rud", &m_inst.rud_aws, "Rudder value");
   register_fpar("meng", &m_inst.meng_aws, "Main engine value");
-  register_fpar("seng", &m_inst.seng_aws, "Sub engine value");
   
   register_fpar("smax", &m_smax, "Maximum speed in knot");
   register_fpar("smin", &m_smin, "Minimum speed in knot");
   register_fpar("meng_max", &m_meng_max, "The maximum value for engine control.");
   register_fpar("meng_min", &m_meng_min, "The minimum value for engine control.");
-  register_fpar("seng_max", &m_seng_max, "The maximum value for engine control.");
-  register_fpar("seng_min", &m_seng_min, "The minimum value for engine control.");
   register_fpar("rev_max", &m_rev_max, "Maximum rev value in RPM");
   register_fpar("rev_min", &m_rev_min, "Minimum rev value in RPM");
 
@@ -230,9 +227,8 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
 			  const long long trev, const float rev,
 			  const s_aws1_ctrl_stat & stat)
 {
-  unsigned short meng, seng, rud;
+  unsigned short meng, rud;
   meng = stat.meng_aws;
-  seng = stat.seng_aws;  
   rud = stat.rud_aws;
 
   if(meng <= stat.meng_nuf && meng >= stat.meng_nub)
@@ -276,15 +272,9 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
   if(meng_prev != meng){
     dmeng = meng - meng_prev;
   }else
-    dseng = 0;
+    dmeng = 0;
   meng_prev = meng;
 
-  if(seng_prev != seng){
-    dseng = seng - seng_prev;
-  }else
-    dseng = 0;
-  seng_prev = seng;
-  
   if(rud_prev != rud){
     drud = rud - rud_prev;
     if(drud < 0)
@@ -422,17 +412,15 @@ bool f_autopilot::proc()
     }else{
     m_rud = 127.;
     m_meng = 127.;
-    m_seng = 127.;
     m_icdiff = m_isdiff = m_irevdiff = 0.;
   }
   if(m_verb){
-    cout << "(meng, seng, rud)=(" << m_meng
-	 << "," << m_seng << "," << m_rud << ")" << endl;
+    cout << "(meng, rud)=(" << m_meng
+	 << "," << m_rud << ")" << endl;
   }
   
   m_inst.tcur = get_time();
   m_inst.meng_aws = (unsigned char) min(max(m_meng, m_meng_min), m_meng_max);
-  m_inst.seng_aws = (unsigned char) min(max(m_seng, m_seng_min), m_seng_max);
   m_inst.rud_aws = (unsigned char) min(max(m_rud, 0.f), 255.f);
   m_ctrl_inst->set(m_inst);
   
@@ -621,7 +609,6 @@ void f_autopilot::wp(const float sog, const float cog, const float yaw, bool bav
   if (m_wp->is_finished()){
     m_rud = 127.;
     m_meng = 127.;
-    m_seng = 127.;
     m_icdiff = m_isdiff = 0.;
   }
   else{
