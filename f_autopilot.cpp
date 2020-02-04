@@ -21,9 +21,9 @@ f_autopilot::f_autopilot(const char * name) :
   f_base(name), 
   m_state(NULL), m_engstate(NULL), m_ctrl_inst(NULL), m_ctrl_stat(NULL), 
   m_ap_inst(NULL), m_ais_obj(NULL), m_verb(false),
-  m_wp(NULL), m_meng(127.), m_rud(127.), 
+  m_wp(NULL), m_eng(127.), m_rud(127.), 
   m_smax(10), m_smin(3), m_rev_max(5500), m_rev_min(700),
-  m_meng_max(200), m_meng_min(80),
+  m_eng_max(200), m_eng_min(80),
   devyaw(3.0f), devcog(3.0f), devsog(1.0f), devrev(500.f),
   m_pc(0.1f), m_ic(0.1f), m_dc(0.1f), m_ps(0.1f), m_is(0.1f), m_ds(0.1f),
   m_cdiff(0.f), m_sdiff(0.f), m_revdiff(0.f),
@@ -49,12 +49,12 @@ f_autopilot::f_autopilot(const char * name) :
   register_fpar("ch_ais_obj", (ch_base**)&m_ais_obj, typeid(ch_ais_obj).name(), "AIS object channel.");
   register_fpar("verb", &m_verb, "Verbose for debug.");
   register_fpar("rud", &m_inst.rud_aws, "Rudder value");
-  register_fpar("meng", &m_inst.meng_aws, "Main engine value");
+  register_fpar("eng", &m_inst.eng_aws, "Main engine value");
   
   register_fpar("smax", &m_smax, "Maximum speed in knot");
   register_fpar("smin", &m_smin, "Minimum speed in knot");
-  register_fpar("meng_max", &m_meng_max, "The maximum value for engine control.");
-  register_fpar("meng_min", &m_meng_min, "The minimum value for engine control.");
+  register_fpar("eng_max", &m_eng_max, "The maximum value for engine control.");
+  register_fpar("eng_min", &m_eng_min, "The minimum value for engine control.");
   register_fpar("rev_max", &m_rev_max, "Maximum rev value in RPM");
   register_fpar("rev_min", &m_rev_min, "Minimum rev value in RPM");
 
@@ -227,13 +227,13 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
 			  const long long trev, const float rev,
 			  const s_aws1_ctrl_stat & stat)
 {
-  unsigned short meng, rud;
-  meng = stat.meng_aws;
+  unsigned short eng, rud;
+  eng = stat.eng_aws;
   rud = stat.rud_aws;
 
-  if(meng <= stat.meng_nuf && meng >= stat.meng_nub)
+  if(eng <= stat.eng_nuf && eng >= stat.eng_nub)
     rev_prop = 0;
-  else if(meng < stat.meng_nub){
+  else if(eng < stat.eng_nub){
     rev_prop = -rev;
   }else{
     rev_prop = rev;
@@ -269,11 +269,11 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
   if(m_verb)
     cout << "ccor,scor,drift" << cog_cor << "," << sog_cor << "," << angle_drift_cor << endl;
   
-  if(meng_prev != meng){
-    dmeng = meng - meng_prev;
+  if(eng_prev != eng){
+    deng = eng - eng_prev;
   }else
-    dmeng = 0;
-  meng_prev = meng;
+    deng = 0;
+  eng_prev = eng;
 
   if(rud_prev != rud){
     drud = rud - rud_prev;
@@ -325,14 +325,14 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
     float ialpha = (float)(1.0 - alpha_tbl_stable_rpm);
     if(irev >= 0){
       tbl_stable_rpm[irev] = (float)(tbl_stable_rpm[irev] * ialpha
-				     +alpha_tbl_stable_rpm * m_meng);
+				     +alpha_tbl_stable_rpm * m_eng);
       monotonize_tbl_stable_rpm(irev);
       if(m_verb)
 	cout << "rpmtbl[" << irev << "] is updated to "
 	     << tbl_stable_rpm[irev] << endl;
     }else{
       tbl_stable_nrpm[-irev] = (float)(float)(tbl_stable_nrpm[irev] * ialpha
-				     +alpha_tbl_stable_rpm * m_meng);
+				     +alpha_tbl_stable_rpm * m_eng);
       monotonize_tbl_stable_nrpm(-irev);
       if(m_verb)
 	cout << "nrpmtbl[" << irev << "] is updated to "
@@ -411,16 +411,16 @@ bool f_autopilot::proc()
       }
     }else{
     m_rud = 127.;
-    m_meng = 127.;
+    m_eng = 127.;
     m_icdiff = m_isdiff = m_irevdiff = 0.;
   }
   if(m_verb){
-    cout << "(meng, rud)=(" << m_meng
+    cout << "(eng, rud)=(" << m_eng
 	 << "," << m_rud << ")" << endl;
   }
   
   m_inst.tcur = get_time();
-  m_inst.meng_aws = (unsigned char) min(max(m_meng, m_meng_min), m_meng_max);
+  m_inst.eng_aws = (unsigned char) min(max(m_eng, m_eng_min), m_eng_max);
   m_inst.rud_aws = (unsigned char) min(max(m_rud, 0.f), 255.f);
   m_ctrl_inst->set(m_inst);
   
@@ -521,41 +521,41 @@ void f_autopilot::ctrl_to_rev(const float rev, const float rev_tgt,
   float _rev_tgt;
   if(abs(rev_tgt) < rev_min){
     _rev_tgt = 0;
-    m_meng = 127.0f;
+    m_eng = 127.0f;
     return;
   }else
     _rev_tgt = rev_tgt;
   
   int irev = (int)(_rev_tgt * 0.01);
   if(irev < 0){ // for negative _rev_tgt
-    m_meng = tbl_stable_nrpm[-irev];
+    m_eng = tbl_stable_nrpm[-irev];
     float revdiff = max(min(rev_max, -_rev_tgt), rev_min) - rev;
     revdiff *= (float)(-1. / (rev_max - rev_min));
     m_drevdiff = (float)(revdiff - m_revdiff);
     float irevdiff = m_irevdiff + revdiff;
     m_revdiff = revdiff;
-    float dmeng = (float)((m_prev * m_revdiff + m_irev * irevdiff
+    float deng = (float)((m_prev * m_revdiff + m_irev * irevdiff
 		       + m_drev * m_drevdiff) * 255.);
-    if(dmeng > 0 || m_meng_min != m_meng){
-      m_meng += dmeng;
+    if(deng > 0 || m_eng_min != m_eng){
+      m_eng += deng;
       m_irevdiff = irevdiff;
     }
-    m_meng = min(127.0f, m_meng);
-    m_meng = max(m_meng_min, m_meng);
+    m_eng = min(127.0f, m_eng);
+    m_eng = max(m_eng_min, m_eng);
   }else {
-    m_meng = tbl_stable_rpm[irev];
+    m_eng = tbl_stable_rpm[irev];
     float revdiff = max(min(rev_max, _rev_tgt), rev_min) - rev;  
     revdiff *= (float)(1. / (rev_max - rev_min));
     m_drevdiff = (float)(revdiff - m_revdiff);
     float irevdiff = m_irevdiff + revdiff;
     m_revdiff = revdiff;
-    float dmeng = (float)((m_prev * m_revdiff + m_irev * irevdiff + m_drev * m_drevdiff) * 255.);
-    if(dmeng < 0 || m_meng_max != m_meng){
-      m_meng += dmeng;
+    float deng = (float)((m_prev * m_revdiff + m_irev * irevdiff + m_drev * m_drevdiff) * 255.);
+    if(deng < 0 || m_eng_max != m_eng){
+      m_eng += deng;
       m_irevdiff = irevdiff;
     }
-    m_meng = max(127.0f, m_meng);
-    m_meng = min(m_meng_max, m_meng);
+    m_eng = max(127.0f, m_eng);
+    m_eng = min(m_eng_max, m_eng);
   }
   if(m_verb){
     cout << "rev ctrl (p,i,d)=" << m_revdiff << "," << m_irevdiff << "," << m_drevdiff << " vtbl[" << irev << "]=" << (irev < 0 ? tbl_stable_nrpm[-irev] : tbl_stable_rpm[irev]) << endl;
@@ -578,12 +578,12 @@ void f_autopilot::ctrl_to_sog(const float sog, const float sog_tgt,
   m_isdiff += sdiff;
   m_sdiff = sdiff;
  
-  m_meng = tbl_stable_rpm[tbl_spd_rpm[(int)stgt]];
-  m_meng += (float)((m_ps * m_sdiff + m_is * m_isdiff + m_ds * m_dsdiff) * 255.);
-  m_meng = (float)min(m_meng, m_meng_max);
-  m_meng = (float)max(m_meng, 127.f);  
+  m_eng = tbl_stable_rpm[tbl_spd_rpm[(int)stgt]];
+  m_eng += (float)((m_ps * m_sdiff + m_is * m_isdiff + m_ds * m_dsdiff) * 255.);
+  m_eng = (float)min(m_eng, m_eng_max);
+  m_eng = (float)max(m_eng, 127.f);  
   if(m_verb){
-    printf("ap tbl[%d]=%d meng=%3.1f stgt=%2.1f sog=%2.1f s=%2.2f ds=%2.2f is=%2.2f \n", (int)stgt, (int)tbl_spd_rpm[(int)stgt], m_meng, stgt, sog, 
+    printf("ap tbl[%d]=%d eng=%3.1f stgt=%2.1f sog=%2.1f s=%2.2f ds=%2.2f is=%2.2f \n", (int)stgt, (int)tbl_spd_rpm[(int)stgt], m_eng, stgt, sog, 
 	   m_sdiff, m_dsdiff, m_isdiff);
   }
 }
@@ -608,7 +608,7 @@ void f_autopilot::wp(const float sog, const float cog, const float yaw, bool bav
   m_wp->lock();
   if (m_wp->is_finished()){
     m_rud = 127.;
-    m_meng = 127.;
+    m_eng = 127.;
     m_icdiff = m_isdiff = 0.;
   }
   else{
@@ -680,7 +680,7 @@ void f_autopilot::stay(const float sog, const float cog, const float yaw)
   if(d > 10.0)
     ctrl_to_sog_cog(sog, sog_tgt, cdiff, 2.0f, 1.0f);  
   else
-    m_meng = 127.f;
+    m_eng = 127.f;
 }
 
 
