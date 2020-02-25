@@ -239,22 +239,14 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
     rev_prop = rev;
   }
   
-  angle_drift = cog - (yaw + yaw_bias);
-  if(angle_drift > 180.0)
-    angle_drift -= 360.0f;
-  else if (angle_drift < -180.0)
-    angle_drift += 360.0f;
-
+  angle_drift = (float) normalize_angle_deg(cog - (yaw + yaw_bias));
+  
   angle_drift *= (PI / 180.0f);
   u = sog * cos(angle_drift);
   v = sog * sin(angle_drift);
   
-  angle_flw = crs_flw - (yaw + yaw_bias);
-  if(angle_flw > 180.0)
-    angle_flw -= 360.0f;
-  else if(angle_flw < -180.0)
-    angle_flw += 360.0f;
-
+  angle_flw = (float) normalize_angle_deg(crs_flw - (yaw + yaw_bias));
+ 
   angle_flw *= (PI / 180.0f);
   uflw = spd_flw * cos(angle_flw);
   vflw = spd_flw * sin(angle_flw);  
@@ -364,6 +356,7 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
       if(m_verb)
 	cout << "local flow updated to C" << crs_flw << ",S" << spd_flw << endl;
     }else{
+      // in the stable motion, drift angle is assumed as the yaw bias.
       ialpha = (float)(1.0 - alpha_yaw_bias);
       yaw_bias = yaw_bias * ialpha + alpha_yaw_bias * angle_drift;      
     }
@@ -494,17 +487,11 @@ void f_autopilot::ctrl_to_cog(const float cdiff)
 {
   float rudmid = (is_rud_ltor ? rudmidlr : rudmidrl);
   float _cdiff = cdiff;
-  // cdiff is normalized to [-180f,180f]
   if(rev_prop < 0)
     _cdiff = -_cdiff;
-  
-  if (abs(_cdiff) > 180.0f){
-    if(_cdiff < 0)
-      _cdiff += 360.f;
-    else
-      _cdiff -= 360.f;
-  }
-  _cdiff *= (float)(1.0f/180.0f);
+  // cdiff is normalized to [-180f,180f]
+  _cdiff = normalize_angle_deg(_cdiff);
+  _cdiff *= (float)(1.0f/180.0f); // normalize 180 deg to 1
   m_dcdiff = (float)(_cdiff - m_cdiff);
   if((_cdiff < 0 && m_rud > 0.f) || (_cdiff > 0 && m_rud < 255.f))
     m_icdiff += _cdiff;
@@ -650,13 +637,8 @@ void f_autopilot::flw_tgt(const float sog, const float cog, const float yaw, boo
 {
   float xr, yr, d, dir;
   m_ap_inst->get_tgt_pos_rel(xr, yr, d, dir);
-  float cdiff = (float)(dir - cog);
-  if (abs(cdiff) > 180.){
-    if (cdiff < 0)
-      cdiff += 360.;
-    else
-      cdiff -= 360.;
-  }
+
+  float cdiff = (float)normalize_angle_deg(dir - cog);
   
   float sog_tgt = 0.0;
   m_ap_inst->get_tgt_sog(sog_tgt);
