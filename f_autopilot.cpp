@@ -381,7 +381,7 @@ bool f_autopilot::proc()
   
   calc_stat(tvel, cog, sog, tatt, yaw, teng, rpm, stat);
 
-  if(stat.ctrl_src == ACS_AP1)
+  if(stat.ctrl_src == ACS_AP)
     {	
       if (!m_ap_inst){
 	wp(sog, cog, yaw);
