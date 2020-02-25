@@ -1,4 +1,4 @@
-// Copyright(c) 2019 Yohei Matsumoto, All right reserved. 
+// Copyright(c) 2020 Yohei Matsumoto, All right reserved. 
 
 // f_autopilot.cpp is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 DEFINE_FILTER(f_autopilot)
 
 f_autopilot::f_autopilot(const char * name) :
-  f_base(name), 
+f_base(name), 
   m_state(NULL), m_engstate(NULL), m_ctrl_inst(NULL), m_ctrl_stat(NULL), 
   m_ap_inst(NULL), m_ais_obj(NULL), m_verb(false),
   m_wp(NULL), m_eng(127.), m_rud(127.), 
@@ -201,7 +201,7 @@ void f_autopilot::load_ctrl_state()
 }
 
 bool f_autopilot::is_stable(const float cog, const float sog,
-			  const float yaw, const float rev)
+			    const float yaw, const float rev)
 {   
   if(abs(yaw-yaw_stbl) < devyaw &&
      abs(cog-cog_stbl) < devcog &&
@@ -221,11 +221,11 @@ bool f_autopilot::is_stable(const float cog, const float sog,
   return false;
 }
 
-void f_autopilot::calc_stat(const long long tvel, const float cog,
-			  const float sog,
-			  const long long tyaw, const float yaw,
-			  const long long trev, const float rev,
-			  const s_aws1_ctrl_stat & stat)
+void f_autopilot::estimate_stat(const long long tvel, const float cog,
+				const float sog,
+				const long long tyaw, const float yaw,
+				const long long trev, const float rev,
+				const s_aws1_ctrl_stat & stat)
 {
   unsigned short eng, rud;
   eng = stat.eng_aws;
@@ -244,8 +244,7 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
     angle_drift -= 360.0f;
   else if (angle_drift < -180.0)
     angle_drift += 360.0f;
-  if(m_verb)
-    cout << "cog,sog,drift=" << cog << "," << sog << "," << angle_drift << endl;
+
   angle_drift *= (PI / 180.0f);
   u = sog * cos(angle_drift);
   v = sog * sin(angle_drift);
@@ -255,8 +254,7 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
     angle_flw -= 360.0f;
   else if(angle_flw < -180.0)
     angle_flw += 360.0f;
-  if(m_verb)
-    cout << "cflw,sflw,drift" << crs_flw << "," << spd_flw << "," << angle_flw << endl;
+
   angle_flw *= (PI / 180.0f);
   uflw = spd_flw * cos(angle_flw);
   vflw = spd_flw * sin(angle_flw);  
@@ -265,9 +263,16 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
   vcor = v - vflw;
   angle_drift_cor = 180.0f * atan2(vcor, ucor) / PI;
   cog_cor = angle_drift_cor + (yaw + yaw_bias);
-  sog_cor = sqrt(uflw * uflw + vflw * vflw);  
-  if(m_verb)
-    cout << "ccor,scor,drift" << cog_cor << "," << sog_cor << "," << angle_drift_cor << endl;
+  sog_cor = sqrt(uflw * uflw + vflw * vflw);
+  
+  if(m_verb){
+    cout << "cog,sog,drift="
+	 << cog << "," << sog << "," << angle_drift << endl;
+    cout << "cflw,sflw,drift"
+	 << crs_flw << "," << spd_flw << "," << angle_flw << endl;
+    cout << "ccor,scor,drift"
+	 << cog_cor << "," << sog_cor << "," << angle_drift_cor << endl;
+  }
   
   if(eng_prev != eng){
     deng = eng - eng_prev;
@@ -319,6 +324,7 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
   trev_prop_prev = trev;
 
   if (is_stable(cog, sog, yaw, rev_prop)){
+    // updating stable rev-eng table.
     int irev =  (int)(rev_prop * 0.01);
     irev = max(irev, 59);
     irev = min(irev, -59);
@@ -332,7 +338,7 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
 	     << tbl_stable_rpm[irev] << endl;
     }else{
       tbl_stable_nrpm[-irev] = (float)(float)(tbl_stable_nrpm[irev] * ialpha
-				     +alpha_tbl_stable_rpm * m_eng);
+					      +alpha_tbl_stable_rpm * m_eng);
       monotonize_tbl_stable_nrpm(-irev);
       if(m_verb)
 	cout << "nrpmtbl[" << irev << "] is updated to "
@@ -349,7 +355,8 @@ void f_autopilot::calc_stat(const long long tvel, const float cog,
       if(m_verb)
 	cout << "rudmidrl is updated to " << rudmidrl << endl;
     }
-    
+
+    // update flow velocity if not propelling. otherwise, update yaw_bias.
     if(rev_prop == 0){
       ialpha = (float)(1.0 - alpha_flw);
       crs_flw = crs_flw * ialpha + alpha_flw * cog;
@@ -379,41 +386,41 @@ bool f_autopilot::proc()
   m_state->get_attitude(tatt, roll, pitch, yaw);
   m_ctrl_stat->get(stat);
   
-  calc_stat(tvel, cog, sog, tatt, yaw, teng, rpm, stat);
+  estimate_stat(tvel, cog, sog, tatt, yaw, teng, rpm, stat);
 
-  if(stat.ctrl_src == ACS_AP)
-    {	
-      if (!m_ap_inst){
-	wp(sog, cog, yaw);
+  if(stat.ctrl_src == ACS_AP){	
+    if (!m_ap_inst){
+      wp(sog, cog, yaw);
+    }
+    else{
+      e_ap_mode mode = m_ap_inst->get_mode();
+      switch (mode){
+      case EAP_STB_MAN: // stabilized manual mode
+	stb_man(cog, rev_prop_prev);
+	break;	  
+      case EAP_CURSOR:
+	cursor(sog, cog, yaw, false);
+	break;
+      case EAP_FLW_TGT:
+	flw_tgt(sog, cog, yaw, false);
+	break;
+      case EAP_STAY:
+	stay(sog_cor, cog_cor, yaw);
+	break;
+      case EAP_WP:
+	wp(sog, cog, yaw, false);
+	break;
+      case EAP_WPAV:
+	wp(sog, cog, yaw, true);
+	break;
       }
-      else{
-	e_ap_mode mode = m_ap_inst->get_mode();
-	switch (mode){
-	case EAP_STB_MAN: // stabilized manual mode
-	  stb_man(cog, rev_prop_prev);
-	  break;	  
-	case EAP_CURSOR:
-	  cursor(sog, cog, yaw, false);
-	  break;
-	case EAP_FLW_TGT:
-	  flw_tgt(sog, cog, yaw, false);
-	  break;
-	case EAP_STAY:
-	  stay(sog_cor, cog_cor, yaw);
-	  break;
-	case EAP_WP:
-	  wp(sog, cog, yaw, false);
-	  break;
-	case EAP_WPAV:
-	  wp(sog, cog, yaw, true);
-	  break;
-	}
-      }
-    }else{
-    m_rud = 127.;
-    m_eng = 127.;
+    }
+  }else{
+    m_rud = stat.rud_aws;
+    m_eng = stat.eng_aws;
     m_icdiff = m_isdiff = m_irevdiff = 0.;
   }
+  
   if(m_verb){
     cout << "(eng, rud)=(" << m_eng
 	 << "," << m_rud << ")" << endl;
@@ -516,7 +523,7 @@ void f_autopilot::ctrl_to_cog(const float cdiff)
 
 
 void f_autopilot::ctrl_to_rev(const float rev, const float rev_tgt,
-			    const float rev_max, const float rev_min)
+			      const float rev_max, const float rev_min)
 {
   float _rev_tgt;
   if(abs(rev_tgt) < rev_min){
@@ -535,7 +542,7 @@ void f_autopilot::ctrl_to_rev(const float rev, const float rev_tgt,
     float irevdiff = m_irevdiff + revdiff;
     m_revdiff = revdiff;
     float deng = (float)((m_prev * m_revdiff + m_irev * irevdiff
-		       + m_drev * m_drevdiff) * 255.);
+			  + m_drev * m_drevdiff) * 255.);
     if(deng > 0 || m_eng_min != m_eng){
       m_eng += deng;
       m_irevdiff = irevdiff;
@@ -563,7 +570,7 @@ void f_autopilot::ctrl_to_rev(const float rev, const float rev_tgt,
 }
 
 void f_autopilot::ctrl_to_sog(const float sog, const float sog_tgt,
-			    const float smax, const float smin)
+			      const float smax, const float smin)
 {
   float rudmid = (is_rud_ltor ? rudmidlr : rudmidrl);
   float srange = (float)(smax - smin);
@@ -589,8 +596,8 @@ void f_autopilot::ctrl_to_sog(const float sog, const float sog_tgt,
 }
 
 void f_autopilot::ctrl_to_sog_cog(const float sog, const float sog_tgt,
-				const float cdiff,
-				const float smax, const float smin)
+				  const float cdiff,
+				  const float smax, const float smin)
 {
   ctrl_to_cog(cdiff);
   ctrl_to_sog(sog, sog_tgt, smax, smin);  
