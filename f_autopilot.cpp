@@ -670,7 +670,7 @@ void f_autopilot::wp(const float sog, const float cog, const float yaw, bool bav
     m_wp->get_diff(d, cdiff, xdiff);
     cdiff += cc;
    
-    ctrl_to_sog_cog(sog, sog_tgt, cdiff, m_smax, m_smin);
+    ctrl_to_sog_cog(sog, sog_tgt, (float)(cdiff * PI / 180.0f), m_smax, m_smin);
   }
   
   m_wp->unlock();
@@ -731,6 +731,6 @@ void f_autopilot::stb_man(const float cog, const float rev)
 {
   float cog_tgt, rev_tgt;
   m_ap_inst->get_tgt_cog_and_rev(cog_tgt, rev_tgt);
-  ctrl_to_cog((float)(cog_tgt - cog));
+  ctrl_to_cog((float)(cog_tgt * PI / 180.0 - cog));
   ctrl_to_rev(rev, rev_tgt, m_rev_max, m_rev_min);  
 }
