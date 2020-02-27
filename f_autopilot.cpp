@@ -15,6 +15,7 @@
 
 #include "f_autopilot.hpp"
 #include "autopilot.pb.h"
+#include <google/protobuf/util/json_util.h>
 DEFINE_FILTER(f_autopilot)
 
 f_autopilot::f_autopilot(const char * name) :
@@ -36,6 +37,7 @@ f_base(name),
   alpha_rud_mid(0.01f),
   alpha_flw(0.1f),
   alpha_yaw_bias(0.1f),
+  x_gps(0.0, 0.0, 0.0),
   twindow_stability_check_sec(3),
   m_Lo(8), m_Wo(2), m_Lais(400), m_Wais(80), m_Rav(3), m_Tav(300), m_Cav_max(45),
   yaw_bias(0.0f)
@@ -140,8 +142,9 @@ bool f_autopilot::init_run()
 
   twindow_stability_check = twindow_stability_check_sec * SEC;
   crs_flw = spd_flw = 0.0f;
-  yaw_prev = cog_prev = sog_prev = rev_prop_prev = 0.0f;
-  tyaw_prev = tcog_prev = tsog_prev = trev_prop_prev = 0;
+  roll_prev = pitch_prev = yaw_prev
+    = cog_prev = sog_prev = rev_prop_prev = 0.0f;
+  tatt_prev = tcog_prev = tsog_prev = trev_prop_prev = 0;
   tbegin_stable = -1;
 
   if(fctrl_state[0] != '\0'){
@@ -167,6 +170,9 @@ void f_autopilot::save_ctrl_state()
   // yaw_bias
   // rudmidlr, rudmidrl
   ApControlState ctrl_state;
+  ctrl_state.set_x_gps(x_gps(0));
+  ctrl_state.set_y_gps(x_gps(1));
+  ctrl_state.set_z_gps(x_gps(2));
   ctrl_state.set_yaw_bias(yaw_bias);
   ctrl_state.set_rudmidlr(rudmidlr);
   ctrl_state.set_rudmidrl(rudmidrl);
@@ -174,7 +180,25 @@ void f_autopilot::save_ctrl_state()
     ctrl_state.add_tbl_stable_rpm(tbl_stable_rpm[i]);
     ctrl_state.add_tbl_stable_nrpm(tbl_stable_nrpm[i]); 
   }
-  ctrl_state.SerializeToOstream(&file);
+  
+  string str_fctrl_state(fctrl_state);
+  if(str_fctrl_state.substr(str_fctrl_state.find_last_of(".") + 1) == "json"){
+    // for json file.
+    string json_string;
+    google::protobuf::util::JsonPrintOptions options;
+    options.add_whitespace = true;
+    options.always_print_primitive_fields = true;
+    options.preserve_proto_field_names = true;
+    if(!google::protobuf::util::MessageToJsonString(ctrl_state, &json_string, options).ok()){
+      spdlog::error("[{}] Failed to save {}.", get_name(), fctrl_state);
+      return;
+    }
+    file << json_string;
+  }else{ // for binary file
+    if(!ctrl_state.SerializeToOstream(&file)){
+      spdlog::error("[{}] Failed to save {}.", get_name(), fctrl_state);
+    }
+  }
 }
 
 void f_autopilot::load_ctrl_state()
@@ -184,17 +208,35 @@ void f_autopilot::load_ctrl_state()
     cerr << "f_autopilot::load_ctrl_state() failed to open file " << fctrl_state << "." << endl;
     return;
   }
-  // yaw_bias
-  // rudmidlr, rudmidrl
-  ApControlState ctrl_state;
-  ctrl_state.ParseFromIstream(&file);
   
-  yaw_bias = ctrl_state.yaw_bias();
-  rudmidlr = ctrl_state.rudmidlr();
-  rudmidrl = ctrl_state.rudmidrl();
-  for (int i = 0; i < 60; i++){
-    tbl_stable_rpm[i] = ctrl_state.tbl_stable_rpm(i);
-    tbl_stable_nrpm[i] = ctrl_state.tbl_stable_nrpm(i);
+  ApControlState ctrl_state;
+  string str_fctrl_state(fctrl_state);
+  if(str_fctrl_state.substr(str_fctrl_state.find_last_of(".") + 1) == "json"){
+    // for json file.
+    stringstream strstream;
+    strstream << file.rdbuf();
+    string json_string(strstream.str());
+    google::protobuf::util::Status st =
+      google::protobuf::util::JsonStringToMessage(json_string, &ctrl_state);
+    if(!st.ok()){
+      spdlog::error("[{}] Failed to load {}.", get_name(), fctrl_state);
+      return;
+    }
+  }else{ // for binary file
+    if(!ctrl_state.ParseFromIstream(&file)){
+      spdlog::error("[{}] Failed to load {}.", get_name(), fctrl_state);
+      return;
+    }
+    x_gps(0) = ctrl_state.x_gps();
+    x_gps(1) = ctrl_state.y_gps();
+    x_gps(2) = ctrl_state.z_gps();
+    yaw_bias = ctrl_state.yaw_bias();
+    rudmidlr = ctrl_state.rudmidlr();
+    rudmidrl = ctrl_state.rudmidrl();
+    for (int i = 0; i < 60; i++){
+      tbl_stable_rpm[i] = ctrl_state.tbl_stable_rpm(i);
+      tbl_stable_nrpm[i] = ctrl_state.tbl_stable_nrpm(i);
+    }
   }
   monotonize_tbl_stable_rpm();
   monotonize_tbl_stable_nrpm();
@@ -223,7 +265,8 @@ bool f_autopilot::is_stable(const float cog, const float sog,
 
 void f_autopilot::estimate_stat(const long long tvel, const float cog,
 				const float sog,
-				const long long tyaw, const float yaw,
+				const long long tatt, const float roll,
+				const float pitch, const float yaw,
 				const long long trev, const float rev,
 				const s_aws1_ctrl_stat & stat)
 {
@@ -238,22 +281,23 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   }else{
     rev_prop = rev;
   }
-  
-  angle_drift = (float) normalize_angle_deg(cog - (yaw + yaw_bias));
-  
-  angle_drift *= (PI / 180.0f);
+
+  // calculate vrot the rotation related velocity to subtract from gps velocity
+  Eigen::Matrix3d R = rotation_matrix(roll, pitch, yaw);
+  Eigen::Matrix3d rx = left_cross_product_matrix(droll, dpitch, dyaw);
+  v_rot = rx * R * x_gps;
+    
+  angle_drift = (float) normalize_angle_rad(cog - (yaw + yaw_bias));  
   u = sog * cos(angle_drift);
   v = sog * sin(angle_drift);
   
-  angle_flw = (float) normalize_angle_deg(crs_flw - (yaw + yaw_bias));
- 
-  angle_flw *= (PI / 180.0f);
+  angle_flw = (float) normalize_angle_rad(crs_flw - (yaw + yaw_bias)); 
   uflw = spd_flw * cos(angle_flw);
   vflw = spd_flw * sin(angle_flw);  
 
-  ucor = u - uflw;
-  vcor = v - vflw;
-  angle_drift_cor = 180.0f * atan2(vcor, ucor) / PI;
+  ucor = u - uflw - v_rot(0);
+  vcor = v - vflw - v_rot(1);
+  angle_drift_cor = atan2(vcor, ucor);
   cog_cor = angle_drift_cor + (yaw + yaw_bias);
   sog_cor = sqrt(uflw * uflw + vflw * vflw);
   
@@ -301,17 +345,23 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   if(tvel > tsog_prev)
     dsog = (double) SEC * (sog - sog_prev) / (double) (tvel - tsog_prev);
 
-  if(tyaw > tyaw_prev)
-    dyaw = (double) SEC * (yaw - yaw_prev) / (double)(tyaw - tyaw_prev);
-
+  if(tatt > tatt_prev){
+    double dt = (double) SEC * (double) (tatt - tatt_prev); 
+    dyaw = dt * (yaw - yaw_prev);
+    dpitch = dt * (pitch - pitch_prev);
+    droll = dt * (roll - roll_prev);
+  }
+  
   if(trev > trev_prop_prev)
     drev = (double) SEC * (rev_prop - rev_prop_prev) / (double)(trev - trev_prop_prev);
 
   cog_prev = cog;
   tcog_prev = tvel;
   tsog_prev = tvel;
+  roll_prev = roll;
+  pitch_prev = pitch;
   yaw_prev = yaw;
-  tyaw_prev = tyaw;
+  tatt_prev = tatt;
   rev_prop_prev = rev_prop;
   trev_prop_prev = trev;
 
@@ -378,8 +428,12 @@ bool f_autopilot::proc()
   m_engstate->get_rapid(teng, rpm, trim);
   m_state->get_attitude(tatt, roll, pitch, yaw);
   m_ctrl_stat->get(stat);
+  roll *= PI/180.f;
+  pitch *= PI/180.f;
+  yaw *= PI/180.f;
+  cog *= PI/180.f;
   
-  estimate_stat(tvel, cog, sog, tatt, yaw, teng, rpm, stat);
+  estimate_stat(tvel, cog, sog, tatt, roll, pitch, yaw, teng, rpm, stat);
 
   if(stat.ctrl_src == ACS_AP){	
     if (!m_ap_inst){
@@ -433,7 +487,7 @@ const float f_autopilot::calc_course_change_for_ais_ship(const float crs)
   float cc = 0.; // course change
   
   if (m_ais_obj){
-    float thcrs = (float)(crs * (PI / 180.));
+    float thcrs = (float)(crs);
     float iwo2 = (float)(1.0 / (m_Wo * m_Wo));
     float ilo2 = (float)(1.0 / (m_Lo * m_Lo));
     
@@ -456,7 +510,7 @@ const float f_autopilot::calc_course_change_for_ais_ship(const float crs)
 	float cro = (float)cos(bro);
 	float sro = (float)sin(bro);
 	
-	float thy = (float)(yw * (PI / 180));
+	float thy = (float)(yw * (PI / 180.0f));
 	float br = (float)(-bear - thy);
 	float cr = (float)cos(br);
 	float sr = (float)sin(br);
@@ -489,9 +543,9 @@ void f_autopilot::ctrl_to_cog(const float cdiff)
   float _cdiff = cdiff;
   if(rev_prop < 0)
     _cdiff = -_cdiff;
-  // cdiff is normalized to [-180f,180f]
-  _cdiff = normalize_angle_deg(_cdiff);
-  _cdiff *= (float)(1.0f/180.0f); // normalize 180 deg to 1
+  // cdiff is normalized to [-PI,PI]
+  _cdiff = normalize_angle_rad(_cdiff);
+  _cdiff *= (float)(1.0f/PI); // normalize PI rad to 1
   m_dcdiff = (float)(_cdiff - m_cdiff);
   if((_cdiff < 0 && m_rud > 0.f) || (_cdiff > 0 && m_rud < 255.f))
     m_icdiff += _cdiff;

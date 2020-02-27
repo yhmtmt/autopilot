@@ -39,7 +39,7 @@ protected:
   
   s_aws1_ctrl_inst m_inst;      // resulting control instruction
   float m_eng;                  // resulting engine control value [0,255]
-  float m_rud;                  // resulting rudder cotnrol value [0, 255]
+  float m_rud;                  // resulting rudder cotnrol value [0,255]
   
   // PID parameters
   float m_cdiff, m_sdiff, m_revdiff;   // course, speed and rev error to target
@@ -50,25 +50,28 @@ protected:
   float m_ps, m_is, m_ds;              // PID coefficient for speed control
   
   // limitter 
-  float m_smax, m_smin;       // speed limit (absolute value)
-  float m_rev_max, m_rev_min; // rev limit (absolute value)
-  float m_eng_max, m_eng_min; // limit for engine control value [0, 255]
+  float m_smax, m_smin;         // speed limit (absolute value)
+  float m_rev_max, m_rev_min;   // rev limit (absolute value)
+  float m_eng_max, m_eng_min;   // limit for engine control value [0, 255]
 
-  unsigned short  deng, drud;   // difference of eng, rud control value
+  unsigned short deng, drud;    // difference of eng, rud control value
   unsigned short eng_prev;      // previous eng
   unsigned short rud_prev;      // previous rud
   
   // related to control state estimation
-  float dyaw, dcog, dsog, drev; // derivative of yaw, cog, sog, rev
+  float droll, dpitch, dyaw;    // derivative of roll, pitch, yaw
+  float dcog, dsog, drev;       // derivative of cog, sog, rev
 
   float crs_flw, spd_flw;       // course and speed of flow estimated
   float alpha_flw;              // flow update factor
   bool is_rud_ltor;             // true if rudder is moving from left to right
+  float roll_prev;              // previous roll
+  float pitch_prev;             // previous pitch
   float yaw_prev;               // previous yaw
   float cog_prev;               // previous cog
   float sog_prev;               // previous sog
   float rev_prop_prev;          // previous propeller rev
-  long long tyaw_prev;          // updated time of previous yaw
+  long long tatt_prev;          // updated time of previous attitude
   long long tcog_prev;          // updated time of previous cog
   long long tsog_prev;          // updated time of previous sog
   long long trev_prop_prev;     // updated time of previous propeller rev
@@ -85,7 +88,8 @@ protected:
   float rev_stbl;                    // rev in stable condition
   float sog_stbl;                    // sog in stable condition
 
-  
+  Eigen::Vector3d v_rot;             // GPS velocity due to rotation
+  Eigen::Vector3d x_gps;             // GPS antenna position in boat coordinate
   float yaw_bias;                   // estimated yaw bias of heading sensor
                                     // (estimated as the average of the
                                     //      difference between cog and yaw)
@@ -100,10 +104,11 @@ protected:
 
   // if the boat is in stable condition, yaw-bias and water-flow is estimated.
   void estimate_stat(const long long tvel, const float cog,
-		 const float sog,
-		 const long long tyaw, const float yaw,
-		 const long long trev, const float rev,
-		 const s_aws1_ctrl_stat & stat);
+		     const float sog,
+		     const long long tatt, const float roll,
+		     const float pitch, const float yaw,
+		     const long long trev, const float rev,
+		     const s_aws1_ctrl_stat & stat);
 
   // is_stable() determines whether the boat is in stable condition.
   // The function watches the stability of yaw, cog, sog, and rev,
