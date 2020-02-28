@@ -295,13 +295,13 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   uflw = spd_flw * cos(angle_flw);
   vflw = spd_flw * sin(angle_flw);  
 
-  ucor = u - uflw - v_rot(0);
-  vcor = v - vflw - v_rot(1);
+  ucor = u - uflw - v_rot(0) / KNOT;
+  vcor = v - vflw - v_rot(1) / KNOT;
   angle_drift_cor = atan2(vcor, ucor);
   cog_cor = angle_drift_cor + (yaw + yaw_bias);
-  sog_cor = sqrt(uflw * uflw + vflw * vflw);
+  sog_cor = sqrt(ucor * ucor + vcor * vcor);
   
-  m_state->set_corrected_velocity(tvel, (float)(cog_cor * 180.0 / PI), (float)(sog_cor / KNOT));
+  m_state->set_corrected_velocity(tvel, (float)(cog_cor * 180.0 / PI), (float)(sog_cor));
   
   if(m_verb){
     cout << "cog,sog,drift="
