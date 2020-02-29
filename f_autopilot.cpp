@@ -287,6 +287,7 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   // calculate vrot the rotation related velocity to subtract from gps velocity
   Eigen::Matrix3d R = rotation_matrix(roll, pitch, yaw);
   Eigen::Matrix3d rx = left_cross_product_matrix(droll, dpitch, dyaw);
+  Eigen::Vector3d Rx_gps = R * x_gps;
   v_rot = rx * R * x_gps;
     
   angle_drift = (float) normalize_angle_rad(cog - (yaw + yaw_bias));  
@@ -352,7 +353,7 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
     dsog = (double) SEC * (sog - sog_prev) / (double) (tvel - tsog_prev);
 
   if(tatt > tatt_prev){
-    double dt = (double) SEC * (double) (tatt - tatt_prev); 
+    double dt = (double) SEC / (double) (tatt - tatt_prev); 
     dyaw = dt * (yaw - yaw_prev);
     dpitch = dt * (pitch - pitch_prev);
     droll = dt * (roll - roll_prev);
