@@ -59,7 +59,6 @@ protected:
   unsigned short rud_prev;      // previous rud
   
   // related to control state estimation
-  float droll, dpitch, dyaw;    // derivative of roll, pitch, yaw
   float dcog, dsog, drev;       // derivative of cog, sog, rev
 
   float crs_flw, spd_flw;       // course and speed of flow estimated
@@ -88,8 +87,6 @@ protected:
   float rev_stbl;                    // rev in stable condition
   float sog_stbl;                    // sog in stable condition
 
-  Eigen::Vector3d v_rot;             // GPS velocity due to rotation
-  Eigen::Vector3d x_gps;             // GPS antenna position in boat coordinate
   float yaw_bias;                   // estimated yaw bias of heading sensor
                                     // (estimated as the average of the
                                     //      difference between cog and yaw)

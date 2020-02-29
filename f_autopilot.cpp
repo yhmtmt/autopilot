@@ -25,7 +25,7 @@ f_base(name),
   m_wp(NULL), m_eng(127.), m_rud(127.), 
   m_smax(10), m_smin(3), m_rev_max(5500), m_rev_min(700),
   m_eng_max(200), m_eng_min(80),
-  devyaw(3.0f), devcog(3.0f), devsog(1.0f), devrev(500.f),
+  devyaw((float)(PI * 3.0f/180.f)), devcog((float)(PI * 3.0f/180.f)), devsog(1.0f), devrev(500.f),
   m_pc(0.1f), m_ic(0.1f), m_dc(0.1f), m_ps(0.1f), m_is(0.1f), m_ds(0.1f),
   m_cdiff(0.f), m_sdiff(0.f), m_revdiff(0.f),
   m_dcdiff(0.f), m_icdiff(0.f),
@@ -37,7 +37,6 @@ f_base(name),
   alpha_rud_mid(0.01f),
   alpha_flw(0.1f),
   alpha_yaw_bias(0.1f),
-  x_gps(0.0, 0.0, 0.0),
   twindow_stability_check_sec(3),
   m_Lo(8), m_Wo(2), m_Lais(400), m_Wais(80), m_Rav(3), m_Tav(300), m_Cav_max(45),
   yaw_bias(0.0f)
@@ -170,9 +169,6 @@ void f_autopilot::save_ctrl_state()
   // yaw_bias
   // rudmidlr, rudmidrl
   ApControlState ctrl_state;
-  ctrl_state.set_x_gps(x_gps(0));
-  ctrl_state.set_y_gps(x_gps(1));
-  ctrl_state.set_z_gps(x_gps(2));
   ctrl_state.set_yaw_bias(yaw_bias);
   ctrl_state.set_rudmidlr(rudmidlr);
   ctrl_state.set_rudmidrl(rudmidrl);
@@ -230,9 +226,6 @@ void f_autopilot::load_ctrl_state()
       return;
     }
   }
-  x_gps(0) = ctrl_state.x_gps();
-  x_gps(1) = ctrl_state.y_gps();
-  x_gps(2) = ctrl_state.z_gps();
   yaw_bias = ctrl_state.yaw_bias();
   rudmidlr = ctrl_state.rudmidlr();
   rudmidrl = ctrl_state.rudmidrl();
@@ -247,8 +240,8 @@ void f_autopilot::load_ctrl_state()
 bool f_autopilot::is_stable(const float cog, const float sog,
 			    const float yaw, const float rev)
 {   
-  if(abs(yaw-yaw_stbl) < devyaw &&
-     abs(cog-cog_stbl) < devcog &&
+  if(abs(normalize_angle_rad(yaw-yaw_stbl)) < devyaw &&
+     abs(normalize_angle_rad(cog-cog_stbl)) < devcog &&
      abs(rev-rev_stbl) < devrev &&
      abs(sog-sog_stbl) < devsog){
     if(tbegin_stable < 0){
@@ -284,12 +277,7 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
     rev_prop = rev;
   }
 
-  // calculate vrot the rotation related velocity to subtract from gps velocity
-  Eigen::Matrix3d R = rotation_matrix(roll, pitch, yaw);
-  Eigen::Matrix3d rx = left_cross_product_matrix(droll, dpitch, dyaw);
-  Eigen::Vector3d Rx_gps = R * x_gps;
-  v_rot = rx * R * x_gps;
-    
+   
   angle_drift = (float) normalize_angle_rad(cog - (yaw + yaw_bias));  
   u = sog * cos(angle_drift);
   v = sog * sin(angle_drift);
@@ -298,21 +286,17 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   uflw = spd_flw * cos(angle_flw);
   vflw = spd_flw * sin(angle_flw);  
 
-  ucor = u - uflw - v_rot(0) / KNOT;
-  vcor = v - vflw - v_rot(1) / KNOT;
+  ucor = u - uflw;
+  vcor = v - vflw;
   angle_drift_cor = atan2(vcor, ucor);
   cog_cor = angle_drift_cor + (yaw + yaw_bias);
   sog_cor = sqrt(ucor * ucor + vcor * vcor);
-  
-  m_state->set_corrected_velocity(tvel, (float)(cog_cor * 180.0 / PI), (float)(sog_cor));
   
   if(m_verb){
     cout << "u,v="
 	 << u << "," << v << endl;
     cout << "uflw,vflw="
 	 << uflw << "," << vflw << endl;
-    cout << "urot,vrot="
-	 << v_rot(0) << "," << v_rot(1) << endl;
     cout << "ucor,vcor"
 	 << ucor << "," << vcor << endl;
   }
@@ -336,9 +320,8 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   
   // Assumption: 
   // v=vboat+vflow
-  // dyaw=0,dcog=0 (straight motion) -> byaw + yaw = cog 
+  // dcog=0 (straight motion) -> byaw + yaw = cog 
   // calculate parameters below
-  // dyaw: yaw rate deg/sec
   // dcog: cog rate deg/sec
   // byaw: yaw bias deg (average cog-yaw, where  bias+yaw=cog)
   // drev: rev rate rpm/sec
@@ -352,13 +335,6 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   if(tvel > tsog_prev)
     dsog = (double) SEC * (sog - sog_prev) / (double) (tvel - tsog_prev);
 
-  if(tatt > tatt_prev){
-    double dt = (double) SEC / (double) (tatt - tatt_prev); 
-    dyaw = dt * (yaw - yaw_prev);
-    dpitch = dt * (pitch - pitch_prev);
-    droll = dt * (roll - roll_prev);
-  }
-  
   if(trev > trev_prop_prev)
     drev = (double) SEC * (rev_prop - rev_prop_prev) / (double)(trev - trev_prop_prev);
 
@@ -430,7 +406,7 @@ bool f_autopilot::proc()
   long long teng = 0;
   long long tvel = 0;
   long long tatt = 0;
-  m_state->get_velocity(tvel, cog, sog);
+  m_state->get_corrected_velocity(tvel, cog, sog);
   m_state->get_enu_rotation(t, Rorg);
   m_engstate->get_rapid(teng, rpm, trim);
   m_state->get_attitude(tatt, roll, pitch, yaw);
