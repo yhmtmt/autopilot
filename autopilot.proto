@@ -6,7 +6,4 @@ message ApControlState{
 	float rudmidrl = 3;
 	repeated float tbl_stable_rpm = 4;
 	repeated float tbl_stable_nrpm = 5;
-	float x_gps = 6;
-	float y_gps = 7;
-	float z_gps = 8;
 }
