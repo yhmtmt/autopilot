@@ -221,22 +221,24 @@ void f_autopilot::load_ctrl_state()
     if(!st.ok()){
       spdlog::error("[{}] Failed to load {}.", get_name(), fctrl_state);
       return;
+    }else{
+      spdlog::info("[{}] {} successfully loaded.", get_name(), fctrl_state);
     }
   }else{ // for binary file
     if(!ctrl_state.ParseFromIstream(&file)){
       spdlog::error("[{}] Failed to load {}.", get_name(), fctrl_state);
       return;
     }
-    x_gps(0) = ctrl_state.x_gps();
-    x_gps(1) = ctrl_state.y_gps();
-    x_gps(2) = ctrl_state.z_gps();
-    yaw_bias = ctrl_state.yaw_bias();
-    rudmidlr = ctrl_state.rudmidlr();
-    rudmidrl = ctrl_state.rudmidrl();
-    for (int i = 0; i < 60; i++){
-      tbl_stable_rpm[i] = ctrl_state.tbl_stable_rpm(i);
-      tbl_stable_nrpm[i] = ctrl_state.tbl_stable_nrpm(i);
-    }
+  }
+  x_gps(0) = ctrl_state.x_gps();
+  x_gps(1) = ctrl_state.y_gps();
+  x_gps(2) = ctrl_state.z_gps();
+  yaw_bias = ctrl_state.yaw_bias();
+  rudmidlr = ctrl_state.rudmidlr();
+  rudmidrl = ctrl_state.rudmidrl();
+  for (int i = 0; i < 60; i++){
+    tbl_stable_rpm[i] = ctrl_state.tbl_stable_rpm(i);
+    tbl_stable_nrpm[i] = ctrl_state.tbl_stable_nrpm(i);
   }
   monotonize_tbl_stable_rpm();
   monotonize_tbl_stable_nrpm();
@@ -304,12 +306,14 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   m_state->set_corrected_velocity(tvel, (float)(cog_cor * 180.0 / PI), (float)(sog_cor));
   
   if(m_verb){
-    cout << "cog,sog,drift="
-	 << cog << "," << sog << "," << angle_drift << endl;
-    cout << "cflw,sflw,drift"
-	 << crs_flw << "," << spd_flw << "," << angle_flw << endl;
-    cout << "ccor,scor,drift"
-	 << cog_cor << "," << sog_cor << "," << angle_drift_cor << endl;
+    cout << "u,v="
+	 << u << "," << v << endl;
+    cout << "uflw,vflw="
+	 << uflw << "," << vflw << endl;
+    cout << "urot,vrot="
+	 << v_rot(0) << "," << v_rot(1) << endl;
+    cout << "ucor,vcor"
+	 << ucor << "," << vcor << endl;
   }
   
   if(eng_prev != eng){
