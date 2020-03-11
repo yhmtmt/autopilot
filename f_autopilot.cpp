@@ -418,29 +418,29 @@ bool f_autopilot::proc()
   
   estimate_stat(tvel, cog, sog, tatt, roll, pitch, yaw, teng, rpm, stat);
 
-  if(stat.ctrl_src == ACS_AP){	
+  if(stat.ctrl_src == ControlSource_AP){	
     if (!m_ap_inst){
       wp(sog, cog, yaw);
     }
     else{
-      e_ap_mode mode = m_ap_inst->get_mode();
+      AutopilotMode mode = m_ap_inst->get_mode();
       switch (mode){
-      case EAP_STB_MAN: // stabilized manual mode
+      case AutopilotMode_STB_MAN: // stabilized manual mode
 	stb_man(cog, rev_prop_prev);
 	break;	  
-      case EAP_CURSOR:
+      case AutopilotMode_CURSOR:
 	cursor(sog, cog, yaw, false);
 	break;
-      case EAP_FLW_TGT:
+      case AutopilotMode_FLW_TGT:
 	flw_tgt(sog, cog, yaw, false);
 	break;
-      case EAP_STAY:
+      case AutopilotMode_STAY:
 	stay(sog_cor, cog_cor, yaw);
 	break;
-      case EAP_WP:
+      case AutopilotMode_WP:
 	wp(sog, cog, yaw, false);
 	break;
-      case EAP_WPAV:
+      case AutopilotMode_WPAV:
 	wp(sog, cog, yaw, true);
 	break;
       }
