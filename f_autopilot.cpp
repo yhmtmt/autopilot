@@ -351,8 +351,8 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   if (is_stable(cog, sog, yaw, rev_prop)){
     // updating stable rev-eng table.
     int irev =  (int)(rev_prop * 0.01);
-    irev = max(irev, 59);
-    irev = min(irev, -59);
+    irev = min(irev, 59);
+    irev = max(irev, -59);
     float ialpha = (float)(1.0 - alpha_tbl_stable_rpm);
     if(irev >= 0){
       tbl_stable_rpm[irev] = (float)(tbl_stable_rpm[irev] * ialpha
