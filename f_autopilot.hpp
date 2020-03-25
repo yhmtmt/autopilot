@@ -54,7 +54,7 @@ protected:
   float m_rev_max, m_rev_min;   // rev limit (absolute value)
   float m_eng_max, m_eng_min;   // limit for engine control value [0, 255]
 
-  unsigned short deng, drud;    // difference of eng, rud control value
+  short deng, drud;             // difference of eng, rud control value
   unsigned short eng_prev;      // previous eng
   unsigned short rud_prev;      // previous rud
   
@@ -118,6 +118,9 @@ protected:
   
   float tbl_stable_rpm[60];	// stable rev-eng table in forward gear 
   float tbl_stable_nrpm[60];    // stable rev-eng table in backward gear
+  float tbl_spd_rpm[30];  
+  float tbl_nspd_nrpm[30];
+
   float alpha_tbl_stable_rpm;   // update coefficient stable rev-eng tables
   float rudmidlr, rudmidrl;     // control values of rudder is in midship.
                                 // the values could change due to the
@@ -147,7 +150,28 @@ protected:
     }   
   }
 
-  char tbl_spd_rpm[30];
+  void monotonize_tbl_spd_rpm(int i = 0)
+  {
+    char irev = tbl_spd_rpm[i];
+    for (i+=1; i < 30; i++){
+      if(tbl_spd_rpm[i] < irev){
+	tbl_spd_rpm[i] = irev;
+      }else{
+	irev = tbl_spd_rpm[i];
+      }
+    }
+  }
+  void monotonize_tbl_nspd_nrpm(int i = 0)
+  {
+    char irev = tbl_spd_rpm[i];
+    for (i+=1; i < 30; i++){
+      if(tbl_nspd_nrpm[i] > irev){
+	tbl_nspd_nrpm[i] = irev;
+      }else{
+	irev = tbl_nspd_nrpm[i];
+      }
+    }
+  }
    
   // related to auto avoidance 
   float m_Lo, m_Wo;             // assumed size for my own ship

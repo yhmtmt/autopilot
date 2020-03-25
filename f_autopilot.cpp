@@ -93,13 +93,13 @@ f_base(name),
   fctrl_state[0] = '\0';
   register_fpar("fctrl_state", fctrl_state, sizeof(fctrl_state), "Autopilot Control State");
   
-  tbl_spd_rpm[0] = 0;
-  tbl_spd_rpm[1] = 0;
+  tbl_spd_rpm[0] = 0.f;
+  tbl_spd_rpm[1] = 0.f;
   for (int i=2; i < 30; i++){
     if (i < 23)
-      tbl_spd_rpm[i] = (char)(7 + (double)(i - 2) * (56.0 - 7.0) / 20.0);  
+      tbl_spd_rpm[i] = (float)(7 + (double)(i - 2) * (56.0 - 7.0) / 20.0);  
     else
-      tbl_spd_rpm[i] = 56.0;
+      tbl_spd_rpm[i] = 56.0f;
   }
 }
 
@@ -176,6 +176,10 @@ void f_autopilot::save_ctrl_state()
     ctrl_state.add_tbl_stable_rpm(tbl_stable_rpm[i]);
     ctrl_state.add_tbl_stable_nrpm(tbl_stable_nrpm[i]); 
   }
+  for (int i = 0; i < 30; i++){
+    ctrl_state.add_tbl_spd_rpm(tbl_spd_rpm[i]);
+    ctrl_state.add_tbl_nspd_nrpm(tbl_nspd_nrpm[i]);
+  }
   
   string str_fctrl_state(fctrl_state);
   if(str_fctrl_state.substr(str_fctrl_state.find_last_of(".") + 1) == "json"){
@@ -233,8 +237,17 @@ void f_autopilot::load_ctrl_state()
     tbl_stable_rpm[i] = ctrl_state.tbl_stable_rpm(i);
     tbl_stable_nrpm[i] = ctrl_state.tbl_stable_nrpm(i);
   }
-  monotonize_tbl_stable_rpm();
-  monotonize_tbl_stable_nrpm();
+
+  if(ctrl_state.tbl_spd_rpm_size() == 30 &&
+     ctrl_state.tbl_nspd_nrpm_size() == 30){
+    for(int i = 0; i< 30; i++){
+      tbl_spd_rpm[i] = ctrl_state.tbl_spd_rpm(i);
+      tbl_nspd_nrpm[i] = ctrl_state.tbl_nspd_nrpm(i);
+    }
+    monotonize_tbl_stable_rpm();
+    monotonize_tbl_stable_nrpm();
+  }
+  
 }
 
 bool f_autopilot::is_stable(const float cog, const float sog,
@@ -276,7 +289,6 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   }else{
     rev_prop = rev;
   }
-
    
   angle_drift = (float) normalize_angle_rad(cog - (yaw + yaw_bias));  
   u = sog * cos(angle_drift);
@@ -297,18 +309,18 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
 	 << u << "," << v << endl;
     cout << "uflw,vflw="
 	 << uflw << "," << vflw << endl;
-    cout << "ucor,vcor"
+    cout << "ucor,vcor="
 	 << ucor << "," << vcor << endl;
   }
   
   if(eng_prev != eng){
-    deng = eng - eng_prev;
+    deng = (int)eng - (int)eng_prev;
   }else
     deng = 0;
   eng_prev = eng;
 
   if(rud_prev != rud){
-    drud = rud - rud_prev;
+    drud = (int)rud - (int)rud_prev;
     if(drud < 0)
       is_rud_ltor = false;
     else
@@ -330,13 +342,16 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   // tbl_stable_rpm[60]: enging control table (rpm vs instruction value)
   
   if(tvel > tcog_prev)
-    dcog = (double) SEC * (cog - cog_prev) / (double) (tvel - tcog_prev);
+    dcog = (double) SEC * normalize_angle_rad(cog - cog_prev)
+      / (double) (tvel - tcog_prev);
 
   if(tvel > tsog_prev)
-    dsog = (double) SEC * (sog - sog_prev) / (double) (tvel - tsog_prev);
+    dsog = (double) SEC * (sog - sog_prev)
+      / (double) (tvel - tsog_prev);
 
   if(trev > trev_prop_prev)
-    drev = (double) SEC * (rev_prop - rev_prop_prev) / (double)(trev - trev_prop_prev);
+    drev = (double) SEC * (rev_prop - rev_prop_prev)
+      / (double)(trev - trev_prop_prev);
 
   cog_prev = cog;
   tcog_prev = tvel;
@@ -349,49 +364,67 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
   trev_prop_prev = trev;
 
   if (is_stable(cog, sog, yaw, rev_prop)){
-    // updating stable rev-eng table.
-    int irev =  (int)(rev_prop * 0.01);
-    irev = min(irev, 59);
-    irev = max(irev, -59);
-    float ialpha = (float)(1.0 - alpha_tbl_stable_rpm);
-    if(irev >= 0){
-      tbl_stable_rpm[irev] = (float)(tbl_stable_rpm[irev] * ialpha
-				     +alpha_tbl_stable_rpm * m_eng);
-      monotonize_tbl_stable_rpm(irev);
-      if(m_verb)
-	cout << "rpmtbl[" << irev << "] is updated to "
-	     << tbl_stable_rpm[irev] << endl;
-    }else{
-      tbl_stable_nrpm[-irev] = (float)(float)(tbl_stable_nrpm[irev] * ialpha
-					      +alpha_tbl_stable_rpm * m_eng);
-      monotonize_tbl_stable_nrpm(-irev);
-      if(m_verb)
-	cout << "nrpmtbl[" << irev << "] is updated to "
-	     << tbl_stable_nrpm[-irev] << endl;
-    }
-    
-    ialpha = (float)(1.0 - alpha_rud_mid);
-    if (is_rud_ltor){
-      rudmidlr = (float)(rudmidlr * ialpha + alpha_rud_mid * m_rud);      
-      if(m_verb)
-	cout << "rudmidlr is updated to " << rudmidlr << endl;
-    }else{
-      rudmidrl = (float)(rudmidrl * ialpha + alpha_rud_mid * m_rud);
-      if(m_verb)
-	cout << "rudmidrl is updated to " << rudmidrl << endl;
-    }
+    if(rev_prop != 0){
+      // updating stable rev-eng table.
+      int irev =  (int)(rev_prop * 0.01 + 0.5);
+      irev = min(irev, 59);
+      irev = max(irev, -59);
+      float ialpha = (float)(1.0 - alpha_tbl_stable_rpm);
+      if(irev >= 0){
+	tbl_stable_rpm[irev] = (float)(tbl_stable_rpm[irev] * ialpha
+				       +alpha_tbl_stable_rpm * m_eng);
+	monotonize_tbl_stable_rpm(irev);
+	if(m_verb)
+	  cout << "eng_rpm[" << irev << "]<-"
+	       << tbl_stable_rpm[irev] << endl;
+      }else{
+	tbl_stable_nrpm[-irev] = (float)(float)(tbl_stable_nrpm[irev] * ialpha
+						+alpha_tbl_stable_rpm * m_eng);
+	monotonize_tbl_stable_nrpm(-irev);
+	if(m_verb)
+	  cout << "eng_nrpm[" << irev << "]<-"
+	       << tbl_stable_nrpm[-irev] << endl;
+      }
 
-    // update flow velocity if not propelling. otherwise, update yaw_bias.
-    if(rev_prop == 0){
-      ialpha = (float)(1.0 - alpha_flw);
-      crs_flw = crs_flw * ialpha + alpha_flw * cog;
-      spd_flw = spd_flw * ialpha + alpha_flw * sog;
-      if(m_verb)
-	cout << "local flow updated to C" << crs_flw << ",S" << spd_flw << endl;
-    }else{
+      // updating sog-rev table
+      int isog = (int)(sog_cor+0.5);
+      if(ucor > 0){ // ahead
+	tbl_spd_rpm[isog] = tbl_spd_rpm[isog] * ialpha
+	  + alpha_tbl_stable_rpm * irev;
+	monotonize_tbl_spd_rpm(isog);
+	if(m_verb)
+	  cout << "spd_rev[" << isog << "]<-" << tbl_spd_rpm[isog] << endl;
+      }else if(ucor < 0){ // astern
+	tbl_nspd_nrpm[isog] = tbl_nspd_nrpm[isog] * ialpha
+	  + alpha_tbl_stable_rpm * irev;
+	monotonize_tbl_nspd_nrpm(isog);
+	if(m_verb)
+	  cout << "nspd_nrev[" << isog << "]<-" << tbl_spd_rpm[isog] << endl;
+      }
+    
+      ialpha = (float)(1.0 - alpha_rud_mid);
+      if (is_rud_ltor){
+	rudmidlr = (float)(rudmidlr * ialpha + alpha_rud_mid * m_rud);      
+	if(m_verb)
+	  cout << "rudmidlr<-" << rudmidlr << endl;
+      }else{
+	rudmidrl = (float)(rudmidrl * ialpha + alpha_rud_mid * m_rud);
+	if(m_verb)
+	  cout << "rudmidrl<-" << rudmidrl << endl;
+      }
       // in the stable motion, drift angle is assumed as the yaw bias.
       ialpha = (float)(1.0 - alpha_yaw_bias);
       yaw_bias = yaw_bias * ialpha + alpha_yaw_bias * angle_drift;      
+
+    }else{
+      // update flow velocity if not propelling. otherwise, update yaw_bias.
+      
+      float ialpha = (float)(1.0 - alpha_flw);
+      crs_flw = crs_flw * ialpha + alpha_flw * cog;
+      spd_flw = spd_flw * ialpha + alpha_flw * sog;
+      if(m_verb)
+	cout << "local flow updated to C" << crs_flw
+	     << ",S" << spd_flw << endl;
     }
   }
 }
@@ -432,16 +465,16 @@ bool f_autopilot::proc()
 	cursor(sog, cog, yaw, false);
 	break;
       case AutopilotMode_FLW_TGT:
-	flw_tgt(sog, cog, yaw, false);
+	flw_tgt(sog_cor, cog, yaw, false);
 	break;
       case AutopilotMode_STAY:
-	stay(sog_cor, cog_cor, yaw);
+	stay(sog_cor, cog, yaw);
 	break;
       case AutopilotMode_WP:
-	wp(sog, cog, yaw, false);
+	wp(sog_cor, cog, yaw, false);
 	break;
       case AutopilotMode_WPAV:
-	wp(sog, cog, yaw, true);
+	wp(sog_cor, cog, yaw, true);
 	break;
       }
     }
@@ -452,8 +485,7 @@ bool f_autopilot::proc()
   }
   
   if(m_verb){
-    cout << "(eng, rud)=(" << m_eng
-	 << "," << m_rud << ")" << endl;
+    cout << "(eng, rud)=(" << m_eng << "," << m_rud << ")" << endl;
   }
   
   m_inst.tcur = get_time();
@@ -522,10 +554,15 @@ const float f_autopilot::calc_course_change_for_ais_ship(const float crs)
 
 void f_autopilot::ctrl_to_cog(const float cdiff)
 {
+  // If flow corrected sog is less than 1kts, don't control any more to avoid rudder chattering.
+  if(sog_cor < 1) 
+    return;
+
   float rudmid = (is_rud_ltor ? rudmidlr : rudmidrl);
   float _cdiff = cdiff;
   if(rev_prop < 0)
     _cdiff = -_cdiff;
+  
   // cdiff is normalized to [-PI,PI]
   _cdiff = normalize_angle_rad(_cdiff);
   _cdiff *= (float)(1.0f/PI); // normalize PI rad to 1
@@ -557,7 +594,7 @@ void f_autopilot::ctrl_to_rev(const float rev, const float rev_tgt,
   }else
     _rev_tgt = rev_tgt;
   
-  int irev = (int)(_rev_tgt * 0.01);
+  int irev = (int)(_rev_tgt * 0.01 + 0.5);
   if(irev < 0){ // for negative _rev_tgt
     m_eng = tbl_stable_nrpm[-irev];
     float revdiff = max(min(rev_max, -_rev_tgt), rev_min) - rev;
@@ -565,10 +602,10 @@ void f_autopilot::ctrl_to_rev(const float rev, const float rev_tgt,
     m_drevdiff = (float)(revdiff - m_revdiff);
     float irevdiff = m_irevdiff + revdiff;
     m_revdiff = revdiff;
-    float deng = (float)((m_prev * m_revdiff + m_irev * irevdiff
+    float delta_eng = (float)((m_prev * m_revdiff + m_irev * irevdiff
 			  + m_drev * m_drevdiff) * 255.);
-    if(deng > 0 || m_eng_min != m_eng){
-      m_eng += deng;
+    if(delta_eng > 0 || m_eng_min != m_eng){
+      m_eng += delta_eng;
       m_irevdiff = irevdiff;
     }
     m_eng = min(127.0f, m_eng);
@@ -580,9 +617,9 @@ void f_autopilot::ctrl_to_rev(const float rev, const float rev_tgt,
     m_drevdiff = (float)(revdiff - m_revdiff);
     float irevdiff = m_irevdiff + revdiff;
     m_revdiff = revdiff;
-    float deng = (float)((m_prev * m_revdiff + m_irev * irevdiff + m_drev * m_drevdiff) * 255.);
-    if(deng < 0 || m_eng_max != m_eng){
-      m_eng += deng;
+    float delta_eng = (float)((m_prev * m_revdiff + m_irev * irevdiff + m_drev * m_drevdiff) * 255.);
+    if(delta_eng < 0 || m_eng_max != m_eng){
+      m_eng += delta_eng;
       m_irevdiff = irevdiff;
     }
     m_eng = max(127.0f, m_eng);
@@ -596,6 +633,11 @@ void f_autopilot::ctrl_to_rev(const float rev, const float rev_tgt,
 void f_autopilot::ctrl_to_sog(const float sog, const float sog_tgt,
 			      const float smax, const float smin)
 {
+  if (abs(sog_tgt) < smin){
+    m_eng = 127.f;
+    return;
+  }
+  
   float rudmid = (is_rud_ltor ? rudmidlr : rudmidrl);
   float srange = (float)(smax - smin);
   
@@ -609,12 +651,12 @@ void f_autopilot::ctrl_to_sog(const float sog, const float sog_tgt,
   m_isdiff += sdiff;
   m_sdiff = sdiff;
  
-  m_eng = tbl_stable_rpm[tbl_spd_rpm[(int)stgt]];
+  m_eng = tbl_stable_rpm[(int)(tbl_spd_rpm[(int)(stgt + 0.5)]+0.5)];
   m_eng += (float)((m_ps * m_sdiff + m_is * m_isdiff + m_ds * m_dsdiff) * 255.);
   m_eng = (float)min(m_eng, m_eng_max);
   m_eng = (float)max(m_eng, 127.f);  
   if(m_verb){
-    printf("ap tbl[%d]=%d eng=%3.1f stgt=%2.1f sog=%2.1f s=%2.2f ds=%2.2f is=%2.2f \n", (int)stgt, (int)tbl_spd_rpm[(int)stgt], m_eng, stgt, sog, 
+    printf("ap tbl[%d]=%2.1f eng=%3.1f stgt=%2.1f sog=%2.1f s=%2.2f ds=%2.2f is=%2.2f \n", (int)stgt, tbl_spd_rpm[(int)(stgt+0.5)], m_eng, stgt, sog, 
 	   m_sdiff, m_dsdiff, m_isdiff);
   }
 }

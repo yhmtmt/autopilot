@@ -6,4 +6,6 @@ message ApControlState{
 	float rudmidrl = 3;
 	repeated float tbl_stable_rpm = 4;
 	repeated float tbl_stable_nrpm = 5;
+	repeated float tbl_spd_rpm = 6;
+	repeated float tbl_nspd_nrpm = 7;
 }
