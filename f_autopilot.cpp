@@ -205,7 +205,8 @@ void f_autopilot::load_ctrl_state()
 {
   ifstream file(fctrl_state);
   if(!file.is_open()){
-    cerr << "f_autopilot::load_ctrl_state() failed to open file " << fctrl_state << "." << endl;
+    spdlog::error("[{}] load_ctrl_state() failed to open file {}.",
+		  get_name(), fctrl_state);
     return;
   }
   
