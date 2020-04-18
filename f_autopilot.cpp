@@ -11,7 +11,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with f_aws1_ui.cpp.  If not, see <http://www.gnu.org/licenses/>. 
+// along with f_autopilot.cpp.  If not, see <http://www.gnu.org/licenses/>. 
 
 #include "f_autopilot.hpp"
 #include "autopilot.pb.h"
@@ -234,9 +234,12 @@ void f_autopilot::load_ctrl_state()
   yaw_bias = ctrl_state.yaw_bias();
   rudmidlr = ctrl_state.rudmidlr();
   rudmidrl = ctrl_state.rudmidrl();
-  for (int i = 0; i < 60; i++){
-    tbl_stable_rpm[i] = ctrl_state.tbl_stable_rpm(i);
-    tbl_stable_nrpm[i] = ctrl_state.tbl_stable_nrpm(i);
+  if(ctrl_state.tbl_stable_rpm_size() == 60 &&
+     ctrl_state.tbl_stable_nrpm_size() == 60){
+    for (int i = 0; i < 60; i++){
+      tbl_stable_rpm[i] = ctrl_state.tbl_stable_rpm(i);
+      tbl_stable_nrpm[i] = ctrl_state.tbl_stable_nrpm(i);
+    }
   }
 
   if(ctrl_state.tbl_spd_rpm_size() == 30 &&
