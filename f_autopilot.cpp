@@ -15,7 +15,8 @@
 
 #include "f_autopilot.hpp"
 #include "autopilot.pb.h"
-#include <google/protobuf/util/json_util.h>
+#include "aws_proto.hpp"
+
 DEFINE_FILTER(f_autopilot)
 
 f_autopilot::f_autopilot(const char * name) :
@@ -161,11 +162,6 @@ void f_autopilot::destroy_run()
 
 void f_autopilot::save_ctrl_state()
 {
-  ofstream file(fctrl_state);
-  if(!file.is_open()){
-    cerr << "f_autopilot::save_ctrl_state() failed to open file " << fctrl_state << "." << endl;
-    return;
-  }
   // yaw_bias
   // rudmidlr, rudmidrl
   ApControlState ctrl_state;
@@ -180,57 +176,28 @@ void f_autopilot::save_ctrl_state()
     ctrl_state.add_tbl_spd_rpm(tbl_spd_rpm[i]);
     ctrl_state.add_tbl_nspd_nrpm(tbl_nspd_nrpm[i]);
   }
-  
-  string str_fctrl_state(fctrl_state);
-  if(str_fctrl_state.substr(str_fctrl_state.find_last_of(".") + 1) == "json"){
-    // for json file.
-    string json_string;
-    google::protobuf::util::JsonPrintOptions options;
-    options.add_whitespace = true;
-    options.always_print_primitive_fields = true;
-    options.preserve_proto_field_names = true;
-    if(!google::protobuf::util::MessageToJsonString(ctrl_state, &json_string, options).ok()){
+
+  char filepath[2048];
+  snprintf(filepath, 2048, "%s/%s", f_base::get_data_path().c_str(),
+	   fctrl_state);
+  if(!save_proto_object(filepath, ctrl_state)){
       spdlog::error("[{}] Failed to save {}.", get_name(), fctrl_state);
       return;
-    }
-    file << json_string;
-  }else{ // for binary file
-    if(!ctrl_state.SerializeToOstream(&file)){
-      spdlog::error("[{}] Failed to save {}.", get_name(), fctrl_state);
-    }
   }
 }
 
 void f_autopilot::load_ctrl_state()
-{
-  ifstream file(fctrl_state);
-  if(!file.is_open()){
-    spdlog::error("[{}] load_ctrl_state() failed to open file {}.",
-		  get_name(), fctrl_state);
-    return;
+{  
+  ApControlState ctrl_state;
+  char filepath[2048];
+  snprintf(filepath, 2048, "%s/%s", f_base::get_data_path().c_str(),
+	   fctrl_state);
+  
+  if(!load_proto_object(filepath, ctrl_state)){
+      spdlog::error("[{}] Failed to load {}.", get_name(), fctrl_state);
+      return;    
   }
   
-  ApControlState ctrl_state;
-  string str_fctrl_state(fctrl_state);
-  if(str_fctrl_state.substr(str_fctrl_state.find_last_of(".") + 1) == "json"){
-    // for json file.
-    stringstream strstream;
-    strstream << file.rdbuf();
-    string json_string(strstream.str());
-    google::protobuf::util::Status st =
-      google::protobuf::util::JsonStringToMessage(json_string, &ctrl_state);
-    if(!st.ok()){
-      spdlog::error("[{}] Failed to load {}.", get_name(), fctrl_state);
-      return;
-    }else{
-      spdlog::info("[{}] {} successfully loaded.", get_name(), fctrl_state);
-    }
-  }else{ // for binary file
-    if(!ctrl_state.ParseFromIstream(&file)){
-      spdlog::error("[{}] Failed to load {}.", get_name(), fctrl_state);
-      return;
-    }
-  }
   yaw_bias = ctrl_state.yaw_bias();
   rudmidlr = ctrl_state.rudmidlr();
   rudmidrl = ctrl_state.rudmidrl();
