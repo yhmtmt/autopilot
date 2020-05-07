@@ -31,15 +31,26 @@ protected:
   // related channels
   ch_state * m_state;
   ch_eng_state * m_engstate;
-  ch_aws1_ctrl_inst * m_ctrl_inst;
-  ch_aws1_ctrl_stat * m_ctrl_stat;
-  ch_aws1_ap_inst * m_ap_inst;
-  ch_wp * m_wp;
-  ch_ais_obj * m_ais_obj;
+
+  ch_ctrl_data * m_ch_ctrl_from_ui;
+  ch_ctrl_data * m_ch_ctrl_to_ui;
+  ch_ctrl_data * m_ch_ctrl_from_ctrl;
+  ch_ctrl_data * m_ch_ctrl_to_ctrl;
+  Control::Payload speed_mode;
+  Control::Payload course_mode;
+  flatbuffers::FlatBufferBuilder ctrl_builder;
+  Control::Engine engine;
+  Control::Rudder rudder;
+  Control::Config config;
+  unsigned char buf[64];
+  size_t buf_len;
   
-  s_aws1_ctrl_inst m_inst;      // resulting control instruction
   float m_eng;                  // resulting engine control value [0,255]
   float m_rud;                  // resulting rudder cotnrol value [0,255]
+  float m_rev_tgt;
+  float m_cog_tgt;
+  float m_sog_tgt;
+  double m_lat_stay, m_lon_stay;
   
   // PID parameters
   float m_cdiff, m_sdiff, m_revdiff;   // course, speed and rev error to target
@@ -104,8 +115,7 @@ protected:
 		     const float sog,
 		     const long long tatt, const float roll,
 		     const float pitch, const float yaw,
-		     const long long trev, const float rev,
-		     const s_aws1_ctrl_stat & stat);
+		     const long long trev, const float rev);
 
   // is_stable() determines whether the boat is in stable condition.
   // The function watches the stability of yaw, cog, sog, and rev,
@@ -173,27 +183,11 @@ protected:
     }
   }
    
-  // related to auto avoidance 
-  float m_Lo, m_Wo;             // assumed size for my own ship
-  float m_Lais, m_Wais;         // assumed size for ais target
-  float m_Rav;                  // range for avoidance(multiple of ship size)
-  float m_Tav;                  // time for avoidance
-  float m_Cav_max;              // maximum course change in degree
-
-  
-  const float calc_course_change_for_ais_ship(const float yaw);
-  void ctrl_to_sog_cog(const float sog, const float sog_tgt,
-		       const float cdiff, const float smax, const float smin);
   void ctrl_to_cog(const float cdiff);
   void ctrl_to_sog(const float sog, const float sog_tgt,
 		   const float smax, const float smin);
   void ctrl_to_rev(const float rev, const float rev_tgt,
 		   const float rev_max, const float rev_min);
-  void stb_man(const float cog, const float rev);
-  void flw_tgt(const float sog, const float cog, const float yaw, bool bav = false);
-  void wp(const float sog, const float cog, const float yaw, bool bav = false);
-  void stay(const float sog, const float cog, const float yaw);
-  void cursor(const float sog, const float cog, const float yaw, bool bav = false);
    
   char fctrl_state[1024];	
   void save_ctrl_state();
