@@ -43,7 +43,7 @@ protected:
   Control::Rudder rudder;
   Control::Config config;
   unsigned char buf[64];
-  size_t buf_len;
+  unsigned int buf_len;
   
   float m_eng;                  // resulting engine control value [0,255]
   float m_rud;                  // resulting rudder cotnrol value [0,255]
