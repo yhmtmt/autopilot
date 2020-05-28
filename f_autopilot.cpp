@@ -26,7 +26,13 @@ f_base(name),
   m_ch_ctrl_from_ctrl(nullptr), m_ch_ctrl_to_ctrl(nullptr),
   speed_mode(Control::Payload_Engine), course_mode(Control::Payload_Rudder),
   m_rev_tgt(0), m_sog_tgt(0), m_cog_tgt(0), m_lat_stay(0), m_lon_stay(0), 
-  m_verb(false), m_eng(127.), m_rud(127.), m_smax(10), m_smin(3),
+  m_verb(false),
+  eng_ctrl(0), rud_ctrl(0),
+  engine_max(255), engine_min(0), engine_nutral(127),
+  engine_backward(0), engine_forward(0),
+  rudder_max(255), rudder_mid(127), rudder_min(0),
+  m_eng(127.), m_rud(127.),
+  m_smax(10), m_smin(3),
   m_rev_max(5500), m_rev_min(700), m_eng_max(200), m_eng_min(80),
   devyaw((float)(PI * 3.0f/180.f)), devcog((float)(PI * 3.0f/180.f)),
   devsog(1.0f), devrev(500.f),
@@ -222,12 +228,12 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
 				const long long trev, const float rev)
 {
   unsigned short eng, rud;
-  eng = engine.value();
-  rud = rudder.value();
+  eng = eng_ctrl;
+  rud = rud_ctrl;
 
-  if(eng <= config.engine_forward() && eng >= config.engine_backward())
+  if(eng <= engine_forward && eng >= engine_backward)
     rev_prop = 0;
-  else if(eng < config.engine_backward()){
+  else if(eng < engine_backward){
     rev_prop = -rev;
   }else{
     rev_prop = rev;
@@ -438,15 +444,23 @@ bool f_autopilot::proc()
       auto data = Control::GetData(buf);
       switch(data->payload_type()){
       case Control::Payload_Engine:
-	engine = *data->payload_as_Engine();
+	eng_ctrl = data->payload_as_Engine()->value();
 	if(m_ch_ctrl_to_ui) m_ch_ctrl_to_ui->push(buf, buf_len);	
 	break;
       case Control::Payload_Rudder:
-	rudder = *data->payload_as_Rudder();
+	rud_ctrl = data->payload_as_Rudder()->value();
 	if(m_ch_ctrl_to_ui) m_ch_ctrl_to_ui->push(buf, buf_len);	
 	break;
       case Control::Payload_Config:
-	config = *data->payload_as_Config();
+	auto config = data->payload_as_Config();
+	engine_max = config->engine_max();
+	engine_min = config->engine_min();
+	engine_forward = config->engine_forward();
+	engine_backward = config->engine_backward();
+	engine_nutral = config->engine_nutral();
+	rudder_max = config->rudder_max();
+	rudder_min = config->rudder_min();
+	rudder_mid = config->rudder_mid();
 	if(m_ch_ctrl_to_ui) m_ch_ctrl_to_ui->push(buf, buf_len);
 	break;
       }
@@ -479,18 +493,18 @@ bool f_autopilot::proc()
   }
  
   if(m_ch_ctrl_to_ctrl){
-    if(engine.value() != (unsigned char)m_eng){
+    if(eng_ctrl != (unsigned char)m_eng){
       ctrl_builder.Clear();
-      auto payload = ctrl_builder.CreateStruct(Control::Engine((unsigned char)m_eng));
+      auto payload = Control::CreateEngine(ctrl_builder, (unsigned char)m_eng);
       auto data = CreateData(ctrl_builder, get_time(),
 			     Control::Payload_Engine, payload.Union());
       ctrl_builder.Finish(data);
       m_ch_ctrl_to_ctrl->push(ctrl_builder.GetBufferPointer(),
 			      ctrl_builder.GetSize());
     }
-    if(rudder.value() != (unsigned char)m_rud){
+    if(rud_ctrl != (unsigned char)m_rud){
       ctrl_builder.Clear();
-      auto payload = ctrl_builder.CreateStruct(Control::Rudder((unsigned char)m_rud));
+      auto payload = Control::CreateRudder(ctrl_builder, (unsigned char)m_rud);
       auto data = CreateData(ctrl_builder, get_time(),
 			     Control::Payload_Rudder, payload.Union());
       ctrl_builder.Finish(data);
