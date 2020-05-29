@@ -42,7 +42,8 @@ f_base(name),
   m_drevdiff(0.f), m_irevdiff(0.f), m_prev(0.1f), m_irev(0.1f), m_drev(0.1f),
   rudmidlr(127.0f), rudmidrl(127.0f),
   alpha_tbl_stable_rpm(0.01f), alpha_rud_mid(0.01f), alpha_flw(0.1f),
-  alpha_yaw_bias(0.1f), twindow_stability_check_sec(3), yaw_bias(0.0f)
+  alpha_yaw_bias(0.1f), twindow_stability_check_sec(3), yaw_bias(0.0f),
+  ctrl_builder(1024)
 {
   register_fpar("ch_state", (ch_base**)&m_state, typeid(ch_state).name(), "State channel");
   register_fpar("ch_engstate", (ch_base**)&m_engstate, typeid(ch_eng_state).name(), "Engine State channel.");
@@ -327,7 +328,7 @@ void f_autopilot::estimate_stat(const long long tvel, const float cog,
 	  cout << "eng_rpm[" << irev << "]<-"
 	       << tbl_stable_rpm[irev] << endl;
       }else{
-	tbl_stable_nrpm[-irev] = (float)(float)(tbl_stable_nrpm[irev] * ialpha
+	tbl_stable_nrpm[-irev] = (float)(float)(tbl_stable_nrpm[-irev] * ialpha
 						+alpha_tbl_stable_rpm * m_eng);
 	monotonize_tbl_stable_nrpm(-irev);
 	if(m_verb)
@@ -407,7 +408,7 @@ bool f_autopilot::proc()
       case Control::Payload_Engine:
 	speed_mode = Control::Payload_Engine;
 	m_eng = data->payload_as_Engine()->value();
-	if(m_ch_ctrl_to_ui) m_ch_ctrl_to_ui->push(buf, buf_len);
+	if(m_ch_ctrl_to_ctrl) m_ch_ctrl_to_ctrl->push(buf, buf_len);
 	break;
       case Control::Payload_Revolution:
 	speed_mode = Control::Payload_Revolution;
@@ -422,7 +423,7 @@ bool f_autopilot::proc()
       case Control::Payload_Rudder:
 	course_mode = Control::Payload_Rudder;
 	m_rud = data->payload_as_Rudder()->value();
-	if(m_ch_ctrl_to_ui) m_ch_ctrl_to_ui->push(buf, buf_len);
+	if(m_ch_ctrl_to_ctrl) m_ch_ctrl_to_ctrl->push(buf, buf_len);
 	break;
       case Control::Payload_Course:
 	course_mode = Control::Payload_Course;
@@ -430,7 +431,7 @@ bool f_autopilot::proc()
 	if(m_ch_ctrl_to_ui) m_ch_ctrl_to_ui->push(buf, buf_len);	
 	break;
       case Control::Payload_Config:
-	if(m_ch_ctrl_to_ui) m_ch_ctrl_to_ui->push(buf, buf_len);		
+	if(m_ch_ctrl_to_ctrl) m_ch_ctrl_to_ctrl->push(buf, buf_len);		
 	break;      
       }
     }
