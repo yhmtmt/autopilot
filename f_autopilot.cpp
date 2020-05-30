@@ -36,6 +36,7 @@ f_base(name),
   m_rev_max(5500), m_rev_min(700), m_eng_max(200), m_eng_min(80),
   devyaw((float)(PI * 3.0f/180.f)), devcog((float)(PI * 3.0f/180.f)),
   devsog(1.0f), devrev(500.f),
+  tctrl_cycle_sec(0.1), tctrl_cycle(0), tctrl_prev(0),
   m_pc(0.1f), m_ic(0.1f), m_dc(0.1f), m_ps(0.1f), m_is(0.1f), m_ds(0.1f),
   m_cdiff(0.f), m_sdiff(0.f), m_revdiff(0.f),
   m_dcdiff(0.f), m_icdiff(0.f), m_dsdiff(0.f), m_isdiff(0.f),
@@ -66,6 +67,8 @@ f_base(name),
   register_fpar("rev_max", &m_rev_max, "Maximum rev value in RPM");
   register_fpar("rev_min", &m_rev_min, "Minimum rev value in RPM");
 
+  register_fpar("tctrl_cycle", &tctrl_cycle, "Control cycle in second.");
+  
   register_fpar("pc", &m_pc, "Coefficient P in the course control with PID.");
   register_fpar("ic", &m_ic, "Coefficient I in the course control with PID.");
   register_fpar("dc", &m_dc, "Coefficient D in the course control with PID.");
@@ -130,6 +133,9 @@ bool f_autopilot::init_run()
   if(fctrl_state[0] != '\0'){
     load_ctrl_state();
   }
+
+  tctrl_cycle = (unsigned int)(tctrl_cycle_sec * SEC);
+  tctrl_prev = 0;
   return true;
 }
 
@@ -468,25 +474,28 @@ bool f_autopilot::proc()
     }
   }
 
-  // speed control
-  switch(speed_mode){
-  case Control::Payload_Engine:
-    break;
-  case Control::Payload_Revolution:
-    ctrl_to_rev(rev_prop_prev, m_rev_tgt, m_rev_max, m_rev_min);
-    break;
-  case Control::Payload_Speed:
-    ctrl_to_sog(sog_cor, m_sog_tgt, m_smax, m_smin);
-      break;
-  }
 
-  // course control
-  switch(course_mode){
-  case Control::Payload_Rudder:
-    break;
-  case Control::Payload_Course:
-    ctrl_to_cog((float)(m_cog_tgt * PI / 180.0 - cog));
-    break;
+  if(tctrl_prev + tctrl_cycle <= get_time()){
+  // speed control
+    switch(speed_mode){
+    case Control::Payload_Engine:
+      break;
+    case Control::Payload_Revolution:
+      ctrl_to_rev(rev_prop_prev, m_rev_tgt, m_rev_max, m_rev_min);
+      break;
+    case Control::Payload_Speed:
+      ctrl_to_sog(sog_cor, m_sog_tgt, m_smax, m_smin);
+      break;
+    }
+    
+    // course control
+    switch(course_mode){
+    case Control::Payload_Rudder:
+      break;
+    case Control::Payload_Course:
+      ctrl_to_cog((float)(m_cog_tgt * PI / 180.0 - cog));
+      break;
+    }
   }
   
   if(m_verb){
