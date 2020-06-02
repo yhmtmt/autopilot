@@ -39,10 +39,10 @@ protected:
   Control::Payload speed_mode;
   Control::Payload course_mode;
   flatbuffers::FlatBufferBuilder ctrl_builder;
-  Control::Engine engine;
-  Control::Rudder rudder;
-  Control::Config config;
-  unsigned char buf[64];
+  unsigned char eng_ctrl, rud_ctrl;
+  unsigned char engine_max, engine_forward, engine_nutral, engine_backward, engine_min;
+  unsigned char rudder_max, rudder_mid, rudder_min;
+  unsigned char buf[256];
   unsigned int buf_len;
   
   float m_eng;                  // resulting engine control value [0,255]
@@ -53,6 +53,9 @@ protected:
   double m_lat_stay, m_lon_stay;
   
   // PID parameters
+  float tctrl_cycle_sec;
+  unsigned int tctrl_cycle;
+  long long tctrl_prev;
   float m_cdiff, m_sdiff, m_revdiff;   // course, speed and rev error to target
   float m_dcdiff, m_dsdiff, m_drevdiff;// diff of course, speed and rev error
   float m_icdiff, m_isdiff, m_irevdiff;// and their integration.
